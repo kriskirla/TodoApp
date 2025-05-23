@@ -21,7 +21,6 @@ The application is structured into three main components:
 - **Backend**: C#, .NET 9
 - **Database**: PostgreSQL
 - **Containerization**: Docker for all components
-- **Real-time Communication**: WebSockets or similar technology for real-time updates.
 
 ## Setup Instructions
 ### Prerequisites
@@ -30,8 +29,8 @@ The application is structured into three main components:
 ### Running the Application
 1. Clone the repository:
    ```
-   git clone <repository-url>
-   cd collaborative-todo-app
+   git clone https://github.com/kriskirla/TodoApp.git
+   cd TodoApp
    ```
 
 2. Build and run the application using Docker Compose:
