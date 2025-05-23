@@ -193,6 +193,25 @@ public class TodoController(
         return Ok(await todoService.UnshareListAsync(list, share, request));
     }
 
+    [HttpGet("list/user")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<TodoList>))]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAllListByUserId()
+    {
+        var userId = GetCurrentUserId();
+        if (userId == null)
+        {
+            return BadRequest("User ID is required");
+        }
+        var lists = await todoService.GetAllListByUserIdAsync(userId.Value);
+        if (lists == null || !lists.Any())
+        {
+            return NotFound("No lists found for this user");
+        }
+        return Ok(lists);
+    }
+
     #region Private Methods
     private Guid? GetCurrentUserId()
     {

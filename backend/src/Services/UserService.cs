@@ -44,7 +44,7 @@ public class UserService(
                 Success = false
             };
         }
-        
+
     }
 
     public async Task<UserOutputDto> CreateUserAsync(string email)
@@ -96,6 +96,19 @@ public class UserService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Error fetching user by ID");
+            return null;
+        }
+    }
+    
+    public async Task<User?> GetUserByEmailAsync(string email)
+    {
+        try
+        {
+            return await context.Users.FirstOrDefaultAsync(u => u.Username == email);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error fetching user by email");
             return null;
         }
     }

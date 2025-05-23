@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using TodoApp.Data;
 using TodoApp.Enums;
 using TodoApp.Models;
@@ -20,7 +21,7 @@ public class TodoService(
             await context.SaveChangesAsync();
             return new TodoListOutputDto
             {
-                Id = list.Id,
+                List = list,
                 Message = "Todo list created successfully",
                 Success = true
             };
@@ -74,7 +75,6 @@ public class TodoService(
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListUpdated", list);
             return new TodoListOutputDto
             {
-                Id = list.Id,
                 List = list,
                 Message = "Todo list updated successfully",
                 Success = true
@@ -85,7 +85,6 @@ public class TodoService(
             logger.LogError(ex, "Failed to update TodoList with ID {ListId}", list.Id);
             return new TodoListOutputDto
             {
-                Id = list.Id,
                 Message = "Failed to update todo list",
                 Success = false
             };
@@ -98,9 +97,10 @@ public class TodoService(
         {
             context.TodoLists.Remove(list);
             await context.SaveChangesAsync();
+            await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListDeleted", list);
             return new TodoListOutputDto
             {
-                Id = list.Id,
+                List = list,
                 Message = "Todo list deleted successfully",
                 Success = true
             };
@@ -110,7 +110,6 @@ public class TodoService(
             logger.LogError(ex, "Failed to delete TodoList with ID {ListId}", list.Id);
             return new TodoListOutputDto
             {
-                Id = list.Id,
                 Message = "Failed to delete todo list",
                 Success = false
             };
@@ -155,7 +154,7 @@ public class TodoService(
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemAdded", item);
             return new TodoListOutputDto
             {
-                Id = item.Id,
+                Item = item,
                 Message = $"Item {item.Id} added successfully",
                 Success = true
             };
@@ -180,7 +179,7 @@ public class TodoService(
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemDeleted", item);
             return new TodoListOutputDto
             {
-                Id = item.Id,
+                Item = item,
                 Message = $"Item {item.Id} deleted successfully",
                 Success = true
             };
@@ -223,7 +222,7 @@ public class TodoService(
             await hubContext.Clients.User(request.UserId.ToString()).SendAsync("ListShared", list);
             return new TodoListOutputDto
             {
-                Id = list.Id,
+                List = list,
                 Message = $"List {list.Id} shared with {request.UserId} successfully",
                 Success = true
             };
@@ -233,7 +232,6 @@ public class TodoService(
             logger.LogError(ex, "Failed to share TodoList with ID {ListId} with user {UserId}", list.Id, request.UserId);
             return new TodoListOutputDto
             {
-                Id = list.Id,
                 Message = $"Failed to share list {list.Id} with {request.UserId}",
                 Success = false
             };
@@ -249,7 +247,7 @@ public class TodoService(
             await hubContext.Clients.User(request.UserId.ToString()).SendAsync("ListUnshared", list);
             return new TodoListOutputDto
             {
-                Id = list.Id,
+                List = list,
                 Message = $"List {list.Id} unshared with {request.UserId} successfully",
                 Success = true
             };
@@ -259,10 +257,26 @@ public class TodoService(
             logger.LogError(ex, "Failed to unshare TodoList with ID {ListId} from user {UserId}", list.Id, request.UserId);
             return new TodoListOutputDto
             {
-                Id = list.Id,
                 Message = $"Failed to unshare list {list.Id} from {request.UserId}",
                 Success = false
             };
+        }
+    }
+
+    public async Task<IEnumerable<TodoList>?> GetAllListByUserIdAsync(Guid userId)
+    {
+        try
+        {
+            var lists = await context.TodoLists
+                .Where(l => l.OwnerId == userId || l.SharedWith.Any(s => s.SharedWithUserId == userId))
+                .ToListAsync();
+
+            return lists;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to fetch TodoLists for user {UserId}", userId);
+            return null;
         }
     }
 }

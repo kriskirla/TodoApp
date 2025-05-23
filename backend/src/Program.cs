@@ -85,6 +85,17 @@ internal class Program
         builder.Services.AddSingleton(new JwtUtil(secretKey));
         builder.Services.AddAuthorization();
 
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("AllowFrontend", builder =>
+            {
+                builder
+                    .WithOrigins("http://localhost:3000")
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+            });
+        });
+
         var app = builder.Build();
 
         using (var scope = app.Services.CreateScope())
@@ -98,7 +109,7 @@ internal class Program
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "Todo API v1");
             c.RoutePrefix = string.Empty;
         });
-
+        app.UseCors("AllowFrontend");
         app.UseRouting();
         app.UseAuthentication();
         app.UseAuthorization();

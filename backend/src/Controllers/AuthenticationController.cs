@@ -63,4 +63,24 @@ public class AuthenticationController(IUserService userService) : ControllerBase
         }
         return Ok(user);
     }
+
+    [HttpGet("user/email/{email}")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(User))]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserByEmail(string email)
+    {
+        if (string.IsNullOrEmpty(email))
+        {
+            return BadRequest("Email is required.");
+        }
+
+        var user = await userService.GetUserByEmailAsync(email);
+
+        if (user == null)
+        {
+            return NotFound("User not found.");
+        }
+        return Ok(user);
+    }
 }
