@@ -26,3 +26,10 @@ Create a user, then Login with the same email. Using the token returned, Authori
 ```
 Bearer <token>
 ```
+
+## Unit tests
+Nagivate to test folder
+```
+cd tests
+dotnet test
+```
