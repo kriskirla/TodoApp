@@ -93,7 +93,6 @@ public class TodoController(
 
     [HttpPost("item/{listId}")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GenericOutputDto))]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddItem(Guid listId, [FromForm] TodoItemForm itemForm)
@@ -108,6 +107,29 @@ public class TodoController(
             return Forbid("You are not the owner or lack edit permission to this list");
         }
         return Ok(await todoService.AddItemToListAsync(list, itemForm));
+    }
+
+    [HttpDelete("item/{listId}/{itemId}")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GenericOutputDto))]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DeleteItem(Guid listId, Guid itemId)
+    {
+        var list = await todoService.GetListAsync(listId);
+        if (list == null)
+        {
+            return NotFound("The todo list cannot be found");
+        }
+        else if (!IsOwner(list) && !IsSharedEditPermission(list))
+        {
+            return Forbid("You are not the owner or lack edit permission to this list");
+        }
+        var item = list.Items.FirstOrDefault(i => i.Id == itemId);
+        if (item == null)
+        {
+            return NotFound("The todo item cannot be found");
+        }
+        return Ok(await todoService.DeleteItemFromListAsync(list, item));
     }
 
     [HttpPost("share/{listId}")]

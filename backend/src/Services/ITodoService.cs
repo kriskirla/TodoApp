@@ -9,6 +9,7 @@ public interface ITodoService
     Task<TodoList?> UpdateListAsync(TodoList list, TodoList update);
     Task<GenericOutputDto> DeleteListAsync(TodoList list);
     Task<GenericOutputDto> AddItemToListAsync(TodoList list, TodoItemForm itemForm);
+    Task<GenericOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item);
     Task<GenericOutputDto> ShareListAsync(TodoList list, ShareRequest request);
     Task<GenericOutputDto> UnshareListAsync(TodoList list, TodoListShare share, ShareRequest request);
 }

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using TodoApp.Data;
 using TodoApp.Enums;
 using TodoApp.Models;
@@ -48,7 +49,7 @@ public class TodoService(
         await context.SaveChangesAsync();
         logger.LogInformation("Updated TodoList with ID {ListId}", list.Id);
         // Notify users with the fully updated list
-        await hubContext.Clients.Group(list.Id.ToString()).SendAsync("List Updated", list);
+        await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListUpdated", list);
         return list;
     }
 
@@ -61,6 +62,7 @@ public class TodoService(
             logger.LogInformation("Deleted TodoList with ID {ListId}", list.Id);
             return new GenericOutputDto
             {
+                Id = list.Id,
                 Message = "Todo list deleted successfully",
                 Success = true
             };
@@ -70,6 +72,7 @@ public class TodoService(
             logger.LogError(ex, "Failed to delete TodoList with ID {ListId}", list.Id);
             return new GenericOutputDto
             {
+                Id = list.Id,
                 Message = "Failed to delete todo list",
                 Success = false
             };
@@ -90,34 +93,33 @@ public class TodoService(
             if (itemForm.Media != null)
             {
                 var extension = Path.GetExtension(itemForm.Media.FileName).ToLower();
-                // Let's assume that we only support mp4, mov for simplicity
-                // This is normally dangerous since file extensions can be spoofed
+                // For simplicity, we are only allowing mp4 and mov for video
+                // In real world scenario, you would want to validate the file type and size
+                // Also, extension could be spoofed, so using a library to check the file type would be better
                 var mediaType = extension is ".mp4" or ".mov" ? MediaType.Video : MediaType.Image;
                 var fileName = $"{Guid.NewGuid()}{extension}";
                 var mediaDirectory = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "media");
 
-                // Ensure directory exists
                 if (!Directory.Exists(mediaDirectory))
                 {
                     Directory.CreateDirectory(mediaDirectory);
                 }
 
                 var filePath = Path.Combine(mediaDirectory, fileName);
-
                 using var stream = new FileStream(filePath, FileMode.Create);
                 await itemForm.Media.CopyToAsync(stream);
-
                 item.MediaUrl = $"/media/{fileName}";
                 item.MediaType = mediaType;
             }
 
-            // Add to DB (you can either use list.Items.Add or context.TodoItems.Add)
-            list.Items.Add(item);
+            context.TodoItems.Add(item);
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemAdded", item);
+
             logger.LogInformation("Added item {ItemId} to TodoList {ListId}", item.Id, list.Id);
             return new GenericOutputDto
             {
+                Id = item.Id,
                 Message = $"Item {item.Id} added successfully",
                 Success = true
             };
@@ -133,10 +135,46 @@ public class TodoService(
         }
     }
 
+    public async Task<GenericOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item)
+    {
+        try
+        {
+            context.TodoItems.Remove(item);
+            await context.SaveChangesAsync();
+            await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemDeleted", item);
+            logger.LogInformation("Deleted item {ItemId} from TodoList {ListId}", item.Id, list.Id);
+            return new GenericOutputDto
+            {
+                Id = item.Id,
+                Message = $"Item {item.Id} deleted successfully",
+                Success = true
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to delete item from TodoList with ID {ListId}", list.Id);
+            return new GenericOutputDto
+            {
+                Message = "Failed to delete item from todo list",
+                Success = false
+            };
+        }
+    }
+
     public async Task<GenericOutputDto> ShareListAsync(TodoList list, ShareRequest request)
     {
         try
         {
+            // Check if the user is already shared
+            if (list.SharedWith.Any(s => s.SharedWithUserId == request.UserId))
+            {
+                return new GenericOutputDto
+                {
+                    Message = $"List already shared with user {request.UserId}",
+                    Success = false
+                };
+            }
+
             var share = new TodoListShare
             {
                 Id = Guid.NewGuid(),
@@ -145,7 +183,7 @@ public class TodoService(
                 Permission = request.Permission
             };
 
-            list.SharedWith.Add(share);
+            context.TodoListShares.Add(share);
             await context.SaveChangesAsync();
             await hubContext.Clients.User(request.UserId.ToString()).SendAsync("ListShared", list);
             logger.LogInformation("Shared TodoList {ListId} with user {UserId}", list.Id, request.UserId);
@@ -170,7 +208,7 @@ public class TodoService(
     {
         try
         {
-            list.SharedWith.Remove(share);
+            context.TodoListShares.Remove(share);
             await context.SaveChangesAsync();
             await hubContext.Clients.User(request.UserId.ToString()).SendAsync("ListUnshared", list);
             logger.LogInformation("Unshared TodoList {ListId} from user {UserId}", list.Id, request.UserId);
