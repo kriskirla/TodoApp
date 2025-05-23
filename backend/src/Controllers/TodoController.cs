@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using TodoApp.Enums;
 using TodoApp.Models;
 using TodoApp.Services;
@@ -16,7 +16,7 @@ public class TodoController(
     IUserService userService) : ControllerBase
 {
     [HttpPost("list/create")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreateList([FromBody] TodoList list)
     {
@@ -47,12 +47,11 @@ public class TodoController(
         {
             return Forbid("You are not the owner or lack view/edit permission to this list");
         }
-
         return Ok(list);
     }
 
     [HttpPut("list/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateList(Guid listId, [FromBody] TodoList update)
@@ -73,7 +72,7 @@ public class TodoController(
     }
 
     [HttpDelete("list/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GenericOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteList(Guid listId)
@@ -92,7 +91,7 @@ public class TodoController(
     }
 
     [HttpPost("item/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GenericOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddItem(Guid listId, [FromForm] TodoItemForm itemForm)
@@ -110,7 +109,7 @@ public class TodoController(
     }
 
     [HttpDelete("item/{listId}/{itemId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GenericOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteItem(Guid listId, Guid itemId)
@@ -133,7 +132,7 @@ public class TodoController(
     }
 
     [HttpPost("share/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GenericOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -160,7 +159,7 @@ public class TodoController(
     }
 
     [HttpPost("unshare/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(GenericOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

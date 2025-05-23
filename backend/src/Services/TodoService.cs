@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
 using TodoApp.Data;
 using TodoApp.Enums;
 using TodoApp.Models;
@@ -12,55 +11,94 @@ public class TodoService(
     IHubContext<TodoHub> hubContext,
     ILogger<TodoService> logger) : ITodoService
 {
-    public async Task<TodoList> CreateListAsync(TodoList list)
+    public async Task<TodoListOutputDto> CreateListAsync(TodoList list)
     {
-        list.Id = Guid.NewGuid();
-        context.TodoLists.Add(list);
-        await context.SaveChangesAsync();
-        logger.LogInformation("Created new TodoList with ID {ListId}", list.Id);
-        return list;
+        try
+        {
+            list.Id = Guid.NewGuid();
+            context.TodoLists.Add(list);
+            await context.SaveChangesAsync();
+            return new TodoListOutputDto
+            {
+                Id = list.Id,
+                Message = "Todo list created successfully",
+                Success = true
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to create TodoList");
+            return new TodoListOutputDto
+            {
+                Message = "Failed to create todo list",
+                Success = false
+            };
+        }
     }
 
     public async Task<TodoList?> GetListAsync(Guid listId)
     {
-        // This checks if eneity is tracked before making a query to the database
-        logger.LogInformation("Fetching TodoList with ID {ListId}", listId);
-        var todoList = await context.TodoLists.FindAsync(listId);
-
-        if (todoList != null)
+        try
         {
-            // Manually load navigation properties if not already loaded
-            if (!context.Entry(todoList).Collection(l => l.Items).IsLoaded)
-            {
-                await context.Entry(todoList).Collection(l => l.Items).LoadAsync();
-            }
+            // This checks if eneity is tracked before making a query to the database
+            var list = await context.TodoLists.FindAsync(listId);
 
-            if (!context.Entry(todoList).Collection(l => l.SharedWith).IsLoaded)
+            if (list != null)
             {
-                await context.Entry(todoList).Collection(l => l.SharedWith).LoadAsync();
+                // Manually load navigation properties if not already loaded
+                if (!context.Entry(list).Collection(l => l.Items).IsLoaded)
+                {
+                    await context.Entry(list).Collection(l => l.Items).LoadAsync();
+                }
+
+                if (!context.Entry(list).Collection(l => l.SharedWith).IsLoaded)
+                {
+                    await context.Entry(list).Collection(l => l.SharedWith).LoadAsync();
+                }
             }
+            return list;
         }
-        return todoList;
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to fetch TodoList with ID {ListId}", listId);
+            return null;
+        }
     }
 
-    public async Task<TodoList?> UpdateListAsync(TodoList list, TodoList update)
+    public async Task<TodoListOutputDto> UpdateListAsync(TodoList list, TodoList update)
     {
-        list.Title = update.Title;
-        await context.SaveChangesAsync();
-        logger.LogInformation("Updated TodoList with ID {ListId}", list.Id);
-        // Notify users with the fully updated list
-        await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListUpdated", list);
-        return list;
+        try
+        {
+            list.Title = update.Title;
+            await context.SaveChangesAsync();
+            await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListUpdated", list);
+            return new TodoListOutputDto
+            {
+                Id = list.Id,
+                List = list,
+                Message = "Todo list updated successfully",
+                Success = true
+            };
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to update TodoList with ID {ListId}", list.Id);
+            return new TodoListOutputDto
+            {
+                Id = list.Id,
+                Message = "Failed to update todo list",
+                Success = false
+            };
+        }
     }
 
-    public async Task<GenericOutputDto> DeleteListAsync(TodoList list)
+    public async Task<TodoListOutputDto> DeleteListAsync(TodoList list)
     {
         try
         {
             context.TodoLists.Remove(list);
             await context.SaveChangesAsync();
-            logger.LogInformation("Deleted TodoList with ID {ListId}", list.Id);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
                 Id = list.Id,
                 Message = "Todo list deleted successfully",
@@ -70,7 +108,7 @@ public class TodoService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to delete TodoList with ID {ListId}", list.Id);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
                 Id = list.Id,
                 Message = "Failed to delete todo list",
@@ -79,7 +117,7 @@ public class TodoService(
         }
     }
 
-    public async Task<GenericOutputDto> AddItemToListAsync(TodoList list, TodoItemForm itemForm)
+    public async Task<TodoListOutputDto> AddItemToListAsync(TodoList list, TodoItemForm itemForm)
     {
         try
         {
@@ -115,9 +153,7 @@ public class TodoService(
             context.TodoItems.Add(item);
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemAdded", item);
-
-            logger.LogInformation("Added item {ItemId} to TodoList {ListId}", item.Id, list.Id);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
                 Id = item.Id,
                 Message = $"Item {item.Id} added successfully",
@@ -127,7 +163,7 @@ public class TodoService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to add item to TodoList with ID {ListId}", list.Id);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
                 Message = "Failed to add item to todo list",
                 Success = false
@@ -135,15 +171,14 @@ public class TodoService(
         }
     }
 
-    public async Task<GenericOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item)
+    public async Task<TodoListOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item)
     {
         try
         {
             context.TodoItems.Remove(item);
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemDeleted", item);
-            logger.LogInformation("Deleted item {ItemId} from TodoList {ListId}", item.Id, list.Id);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
                 Id = item.Id,
                 Message = $"Item {item.Id} deleted successfully",
@@ -153,7 +188,7 @@ public class TodoService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to delete item from TodoList with ID {ListId}", list.Id);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
                 Message = "Failed to delete item from todo list",
                 Success = false
@@ -161,14 +196,14 @@ public class TodoService(
         }
     }
 
-    public async Task<GenericOutputDto> ShareListAsync(TodoList list, ShareRequest request)
+    public async Task<TodoListOutputDto> ShareListAsync(TodoList list, ShareRequest request)
     {
         try
         {
             // Check if the user is already shared
             if (list.SharedWith.Any(s => s.SharedWithUserId == request.UserId))
             {
-                return new GenericOutputDto
+                return new TodoListOutputDto
                 {
                     Message = $"List already shared with user {request.UserId}",
                     Success = false
@@ -186,9 +221,9 @@ public class TodoService(
             context.TodoListShares.Add(share);
             await context.SaveChangesAsync();
             await hubContext.Clients.User(request.UserId.ToString()).SendAsync("ListShared", list);
-            logger.LogInformation("Shared TodoList {ListId} with user {UserId}", list.Id, request.UserId);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
+                Id = list.Id,
                 Message = $"List {list.Id} shared with {request.UserId} successfully",
                 Success = true
             };
@@ -196,24 +231,25 @@ public class TodoService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to share TodoList with ID {ListId} with user {UserId}", list.Id, request.UserId);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
+                Id = list.Id,
                 Message = $"Failed to share list {list.Id} with {request.UserId}",
                 Success = false
             };
         }
     }
 
-    public async Task<GenericOutputDto> UnshareListAsync(TodoList list, TodoListShare share, ShareRequest request)
+    public async Task<TodoListOutputDto> UnshareListAsync(TodoList list, TodoListShare share, ShareRequest request)
     {
         try
         {
             context.TodoListShares.Remove(share);
             await context.SaveChangesAsync();
             await hubContext.Clients.User(request.UserId.ToString()).SendAsync("ListUnshared", list);
-            logger.LogInformation("Unshared TodoList {ListId} from user {UserId}", list.Id, request.UserId);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
+                Id = list.Id,
                 Message = $"List {list.Id} unshared with {request.UserId} successfully",
                 Success = true
             };
@@ -221,8 +257,9 @@ public class TodoService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to unshare TodoList with ID {ListId} from user {UserId}", list.Id, request.UserId);
-            return new GenericOutputDto
+            return new TodoListOutputDto
             {
+                Id = list.Id,
                 Message = $"Failed to unshare list {list.Id} from {request.UserId}",
                 Success = false
             };

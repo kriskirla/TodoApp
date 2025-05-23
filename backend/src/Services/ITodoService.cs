@@ -4,12 +4,12 @@ namespace TodoApp.Services;
 
 public interface ITodoService
 {
-    Task<TodoList> CreateListAsync(TodoList listId);
+    Task<TodoListOutputDto> CreateListAsync(TodoList listId);
     Task<TodoList?> GetListAsync(Guid listId);
-    Task<TodoList?> UpdateListAsync(TodoList list, TodoList update);
-    Task<GenericOutputDto> DeleteListAsync(TodoList list);
-    Task<GenericOutputDto> AddItemToListAsync(TodoList list, TodoItemForm itemForm);
-    Task<GenericOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item);
-    Task<GenericOutputDto> ShareListAsync(TodoList list, ShareRequest request);
-    Task<GenericOutputDto> UnshareListAsync(TodoList list, TodoListShare share, ShareRequest request);
+    Task<TodoListOutputDto> UpdateListAsync(TodoList list, TodoList update);
+    Task<TodoListOutputDto> DeleteListAsync(TodoList list);
+    Task<TodoListOutputDto> AddItemToListAsync(TodoList list, TodoItemForm itemForm);
+    Task<TodoListOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item);
+    Task<TodoListOutputDto> ShareListAsync(TodoList list, ShareRequest request);
+    Task<TodoListOutputDto> UnshareListAsync(TodoList list, TodoListShare share, ShareRequest request);
 }

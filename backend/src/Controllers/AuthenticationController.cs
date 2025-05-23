@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Todo.Models;
 using TodoApp.Models;
@@ -22,21 +21,21 @@ public class AuthenticationController(IUserService userService) : ControllerBase
             return BadRequest("Email is required.");
         }
 
-        (bool success, string token) = await userService.AuthenticateUserAsync(request.Email);
+        var result = await userService.AuthenticateUserAsync(request.Email);
 
-        if (!success || token == null)
+        if (!result.Success || result.Token == null)
         {
             return Unauthorized("Invalid Email.");
         }
 
         return Ok(new LoginOutputDto
         {
-            Token = token
+            Token = result.Token
         });
     }
 
     [HttpPost("user/create")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(User))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UserOutputDto))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
