@@ -1,0 +1,50 @@
+# Collaborative TODO Application
+
+## Overview
+The Collaborative TODO Application is a real-time collaborative platform that allows users to create, update, and manage TODO lists. Users can share their lists with others, allowing for collaborative editing and viewing. The application supports media content such as images and videos, enhancing the functionality of TODO items.
+
+## Features
+- Create, update, and delete TODO lists.
+- Add media content (images and videos) to TODO items.
+- Share TODO lists with other users with edit or view-only permissions.
+- Real-time updates for collaborative editing.
+- Scalable architecture to support up to 100 million daily active users.
+
+## Architecture
+The application is structured into three main components:
+1. **Frontend**: Built with React, providing a user-friendly interface for managing TODO lists.
+2. **Backend**: Developed using C# and .NET 9, handling business logic and data management.
+3. **Database**: PostgreSQL is used for data storage, ensuring reliable and efficient data access.
+
+## Technologies Used
+- **Frontend**: React, TypeScript
+- **Backend**: C#, .NET 9
+- **Database**: PostgreSQL
+- **Containerization**: Docker for all components
+- **Real-time Communication**: WebSockets or similar technology for real-time updates.
+
+## Setup Instructions
+### Prerequisites
+- Docker and Docker Compose installed on your machine.
+
+### Running the Application
+1. Clone the repository:
+   ```
+   git clone <repository-url>
+   cd collaborative-todo-app
+   ```
+
+2. Build and run the application using Docker Compose:
+   ```
+   docker-compose up --build
+   ```
+
+3. Access the application:
+   - Frontend: `http://localhost:3000`
+   - Backend API: `http://localhost:5286`
+
+### Killing the Application
+1. Remove all running containers and images
+   ```
+   docker-compose down --rmi all --volumes
+   ```

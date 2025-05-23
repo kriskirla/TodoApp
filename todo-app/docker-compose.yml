@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+#   frontend:
+#     build:
+#       context: ./frontend
+#       dockerfile: Dockerfile
+#     ports:
+#       - "3000:3000"
+#     depends_on:
+#       - backend
+#     networks:
+#       - todo-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5286:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    depends_on:
+      - database
+    networks:
+      - todo-network
+
+  database:
+    build:
+      context: ./database
+      dockerfile: Dockerfile
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: todo_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - todo-network
+
+networks:
+  todo-network:
+    driver: bridge
+
+volumes:
+  db_data:
