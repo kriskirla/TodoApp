@@ -263,7 +263,7 @@ public class TodoService(
         }
     }
 
-    public async Task<IEnumerable<TodoList>?> GetAllListByUserIdAsync(Guid userId)
+    public async Task<IEnumerable<TodoList>> GetAllListByUserIdAsync(Guid userId)
     {
         try
         {
@@ -276,7 +276,7 @@ public class TodoService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to fetch TodoLists for user {UserId}", userId);
-            return null;
+            return [];
         }
     }
 }

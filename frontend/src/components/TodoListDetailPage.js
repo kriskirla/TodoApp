@@ -1,19 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { List, ListItem, ListItemText, TextField, Button, Typography, Box } from '@mui/material';
 import * as todoApi from '../api/todo';
 
-const TodoListDetailPage = ({ token, listId }) => {
+const TodoListDetailPage = ({ token }) => {
+    const { id: listId } = useParams();
     const [list, setList] = useState(null);
     const [newItemTitle, setNewItemTitle] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [newItemMedia, setNewItemMedia] = useState(null);
     const [error, setError] = useState(null);
+    const navigate = useNavigate();
+    const fileInputRef = useRef();
 
-    useEffect(() => {
-        fetchListDetails();
-    }, [listId]);
-
-    const fetchListDetails = async () => {
-        setLoading(true);
+    const fetchListDetails = useCallback(async () => {
         setError(null);
         try {
             const data = await todoApi.getList(listId, token);
@@ -21,17 +20,34 @@ const TodoListDetailPage = ({ token, listId }) => {
         } catch (err) {
             console.error('Failed to fetch list details:', err);
             setError('Failed to fetch list details.');
-        } finally {
-            setLoading(false);
         }
+    }, [listId, token]);
+
+    useEffect(() => {
+        fetchListDetails();
+    }, [fetchListDetails]);
+
+    const handleBack = () => {
+        navigate('/');
     };
 
     const handleAddItem = async () => {
         if (!newItemTitle.trim()) return;
         setError(null);
+
         try {
-            await todoApi.addItem(listId, { title: newItemTitle }, token);
+            const itemForm = { description: newItemTitle };
+            if (newItemMedia) {
+                itemForm.media = newItemMedia;
+            }
+
+            await todoApi.addItem(listId, itemForm, token);
             setNewItemTitle('');
+            setNewItemMedia(null);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+
             fetchListDetails();
         } catch (err) {
             console.error('Failed to add item:', err);
@@ -50,12 +66,15 @@ const TodoListDetailPage = ({ token, listId }) => {
         }
     };
 
-    if (loading) return <div>Loading...</div>;
     if (error) return <Typography color="error">{error}</Typography>;
     if (!list) return null;
 
     return (
         <Box maxWidth={600} mx="auto" p={2}>
+            <Button variant="outlined" onClick={handleBack} sx={{ mb: 2 }}>
+                Back
+            </Button>
+
             <Typography variant="h4" gutterBottom>
                 {list.title}
             </Typography>
@@ -70,29 +89,65 @@ const TodoListDetailPage = ({ token, listId }) => {
                             </Button>
                         }
                     >
-                        <ListItemText primary={item.title} />
+                        <Box>
+                            <ListItemText primary={item.description} />
+                            {item.mediaUrl && item.mediaType === 0 && (
+                                <img
+                                    src={`http://localhost:5286${item.mediaUrl}`}
+                                    alt="media"
+                                    style={{ maxWidth: '100px', marginTop: 4 }}
+                                />
+                            )}
+                            {item.mediaUrl && item.mediaType === 1 && (
+                                <video controls width="200" style={{ marginTop: 4 }}>
+                                    <source
+                                        src={`http://localhost:5286${item.mediaUrl}`}
+                                        type={item.mediaUrl.toLowerCase().endsWith('.mov') ? 'video/quicktime' : 'video/mp4'}
+                                    />
+                                    Your browser does not support the video tag.
+                                </video>
+                            )}
+                        </Box>
                     </ListItem>
+
                 ))}
             </List>
 
-            <Box display="flex" mt={2}>
+            <Box display="flex" mt={2} alignItems="center" gap={1}>
                 <TextField
                     label="New Item"
                     variant="outlined"
                     fullWidth
                     value={newItemTitle}
                     onChange={(e) => setNewItemTitle(e.target.value)}
-                    onKeyPress={(e) => {
+                    onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                             handleAddItem();
                             e.preventDefault();
                         }
                     }}
                 />
-                <Button variant="contained" color="primary" onClick={handleAddItem} sx={{ ml: 1 }}>
-                    Add Item
+
+                <input
+                    type="file"
+                    accept="image/*,video/mp4,video/mov"
+                    ref={fileInputRef}
+                    onChange={(e) => setNewItemMedia(e.target.files[0] || null)}
+                    style={{ cursor: 'pointer' }}
+                />
+
+                <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleAddItem}
+                    sx={{ ml: 1 }}
+                    disabled={!newItemTitle.trim()}
+                >
+                    Add
                 </Button>
+
             </Box>
+
         </Box>
     );
 };

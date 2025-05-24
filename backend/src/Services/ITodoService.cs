@@ -12,5 +12,5 @@ public interface ITodoService
     Task<TodoListOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item);
     Task<TodoListOutputDto> ShareListAsync(TodoList list, ShareRequest request);
     Task<TodoListOutputDto> UnshareListAsync(TodoList list, TodoListShare share, ShareRequest request);
-    Task<IEnumerable<TodoList>?> GetAllListByUserIdAsync(Guid userId);
+    Task<IEnumerable<TodoList>> GetAllListByUserIdAsync(Guid userId);
 }

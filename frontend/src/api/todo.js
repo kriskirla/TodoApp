@@ -28,7 +28,6 @@ export async function deleteList(listId, token) {
 }
 
 export async function addItem(listId, itemForm, token) {
-    // itemForm is sent as form-data; Axios can send JSON by default, so use FormData if needed
     const formData = new FormData();
     for (const key in itemForm) {
         formData.append(key, itemForm[key]);

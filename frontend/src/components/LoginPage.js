@@ -9,13 +9,15 @@ const LoginPage = ({ onLogin }) => {
     const handleSubmit = async () => {
         setError(null);
         try {
-            // Create user
+            // Going to assume there's no registration process
+            // If the user doesn't exist, create them
             await createUser(email);
 
             // Login user
             const data = await login(email);
             const token = data.token || data.Token;
-
+            
+            // Store and persist token
             localStorage.setItem('token', token);
             onLogin(token);
         } catch (err) {

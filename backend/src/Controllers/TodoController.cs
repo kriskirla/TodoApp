@@ -196,7 +196,6 @@ public class TodoController(
     [HttpGet("list/user")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<TodoList>))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetAllListByUserId()
     {
         var userId = GetCurrentUserId();
@@ -204,12 +203,7 @@ public class TodoController(
         {
             return BadRequest("User ID is required");
         }
-        var lists = await todoService.GetAllListByUserIdAsync(userId.Value);
-        if (lists == null || !lists.Any())
-        {
-            return NotFound("No lists found for this user");
-        }
-        return Ok(lists);
+        return Ok(await todoService.GetAllListByUserIdAsync(userId.Value));
     }
 
     #region Private Methods

@@ -4,27 +4,27 @@ const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:528
 
 export async function login(email) {
     const response = await axios.post(`${API_BASE_URL}/login`, { email });
-    return response.data; // { Token: string }
+    return response.data; // LoginOutputDto
 }
 
 export async function createUser(email) {
     const response = await axios.post(`${API_BASE_URL}/user/create`, null, { params: { email } });
-    return response.data;
+    return response.data; // UserOutputDto
 }
 
 export async function getUserById(id) {
     const response = await axios.get(`${API_BASE_URL}/user/${id}`);
-    return response.data;
+    return response.data; // User
 }
 
 export async function getUserByEmail(email) {
     const response = await axios.get(`${API_BASE_URL}/user/email/${email}`);
-    return response.data;
+    return response.data; // User
 }
 
 
 /* For reference, the expected response structure:
-Token
+LoginOutputDto
 {
     token: string;
     expiration: DateTime;
