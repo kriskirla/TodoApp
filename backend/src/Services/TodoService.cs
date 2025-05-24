@@ -135,12 +135,7 @@ public class TodoService(
                 // Also, extension could be spoofed, so using a library to check the file type would be better
                 var mediaType = extension is ".mp4" or ".mov" ? MediaType.Video : MediaType.Image;
                 var fileName = $"{Guid.NewGuid()}{extension}";
-                var mediaDirectory = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "media");
-
-                if (!Directory.Exists(mediaDirectory))
-                {
-                    Directory.CreateDirectory(mediaDirectory);
-                }
+                var mediaDirectory = Path.Combine(Directory.GetCurrentDirectory(), "media");
 
                 var filePath = Path.Combine(mediaDirectory, fileName);
                 using var stream = new FileStream(filePath, FileMode.Create);
@@ -174,6 +169,16 @@ public class TodoService(
     {
         try
         {
+            // Delete associated media file if it exists
+            if (!string.IsNullOrEmpty(item.MediaUrl))
+            {
+                var filePath = Path.Combine(Directory.GetCurrentDirectory(), item.MediaUrl.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString()));
+                if (File.Exists(filePath))
+                {
+                    File.Delete(filePath);
+                }
+            }
+
             context.TodoItems.Remove(item);
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemDeleted", item);
@@ -194,6 +199,7 @@ public class TodoService(
             };
         }
     }
+
 
     public async Task<TodoListOutputDto> ShareListAsync(TodoList list, ShareRequest request)
     {

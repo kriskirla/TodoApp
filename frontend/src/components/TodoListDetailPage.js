@@ -4,6 +4,7 @@ import { List, ListItem, ListItemText, TextField, Button, Typography, Box } from
 import * as todoApi from '../api/todo';
 
 const TodoListDetailPage = ({ token }) => {
+    const API_BASE_URL = 'http://localhost:5286';
     const { id: listId } = useParams();
     const [list, setList] = useState(null);
     const [newItemTitle, setNewItemTitle] = useState('');
@@ -93,7 +94,7 @@ const TodoListDetailPage = ({ token }) => {
                             <ListItemText primary={item.description} />
                             {item.mediaUrl && item.mediaType === 0 && (
                                 <img
-                                    src={`http://localhost:5286${item.mediaUrl}`}
+                                    src={API_BASE_URL + item.mediaUrl}
                                     alt="media"
                                     style={{ maxWidth: '100px', marginTop: 4 }}
                                 />
@@ -101,7 +102,7 @@ const TodoListDetailPage = ({ token }) => {
                             {item.mediaUrl && item.mediaType === 1 && (
                                 <video controls width="200" style={{ marginTop: 4 }}>
                                     <source
-                                        src={`http://localhost:5286${item.mediaUrl}`}
+                                        src={API_BASE_URL + item.mediaUrl}
                                         type={item.mediaUrl.toLowerCase().endsWith('.mov') ? 'video/quicktime' : 'video/mp4'}
                                     />
                                     Your browser does not support the video tag.

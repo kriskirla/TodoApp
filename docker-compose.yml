@@ -24,6 +24,8 @@ services:
       - database
     networks:
       - todo-network
+    volumes:
+      - media_data:/app/media
 
   database:
     build:
@@ -46,3 +48,4 @@ networks:
 
 volumes:
   db_data:
+  media_data:

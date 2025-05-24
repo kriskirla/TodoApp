@@ -1,5 +1,6 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using NReco.Logging.File;
 using System.Text;
@@ -85,6 +86,7 @@ internal class Program
         builder.Services.AddSingleton(new JwtUtil(secretKey));
         builder.Services.AddAuthorization();
 
+        // Configure CORS
         builder.Services.AddCors(options =>
         {
             options.AddPolicy("AllowFrontend", builder =>
@@ -102,6 +104,19 @@ internal class Program
         {
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         }
+
+        // Allow serving static files
+        var mediaDir = Path.Combine(Directory.GetCurrentDirectory(), "media");
+        if (!Directory.Exists(mediaDir))
+        {
+            Directory.CreateDirectory(mediaDir);
+        }
+        app.UseStaticFiles();
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "media")),
+            RequestPath = "/media"
+        });
 
         app.UseSwagger();
         app.UseSwaggerUI(c =>
