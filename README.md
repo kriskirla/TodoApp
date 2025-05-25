@@ -41,6 +41,17 @@ The application is structured into three main components:
    docker-compose up --build
    ```
 
+   **Note**: You may encounter issue during dotnet restore when running on coperate machine like below
+   ```
+   The remote certificate is invalid because of errors in the certificate chain: PartialChain
+   ```
+   In that case, you can add this above dotnet restore in the backend Dockerfile
+   ```
+   RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+   ```
+   If it still doesn't work, then you can manually add your corporate root CA certificate in the container.
+   Otherwise, use personal machine.
+
 3. Access the application:
    - Frontend: `http://localhost:3000`
    - Backend API: `http://localhost:5286`
