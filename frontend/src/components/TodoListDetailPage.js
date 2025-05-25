@@ -14,7 +14,7 @@ const TodoListDetailPage = ({ token }) => {
     const [error, setError] = useState(null);
     const navigate = useNavigate();
     const fileInputRef = useRef();
-    const { connection } = useContext(SignalRContext);
+    const { connection, joinedGroups } = useContext(SignalRContext);
 
     const fetchListDetails = useCallback(async () => {
         setError(null);
@@ -30,6 +30,18 @@ const TodoListDetailPage = ({ token }) => {
     useEffect(() => {
         if (!connection) return;
 
+        const joinGroupIfNeeded = async () => {
+            try {
+                // Avoid duplicate joins if context is tracking it
+                if (!joinedGroups.current.has(listId)) {
+                    await connection.invoke("JoinListGroup", listId);
+                    joinedGroups.current.add(listId);
+                }
+            } catch (err) {
+                console.error("Failed to join list in Detail Page:", err);
+            }
+        };
+
         const showToastAndRefresh = (msg) => {
             toast.info(msg);
             fetchListDetails();
@@ -42,12 +54,13 @@ const TodoListDetailPage = ({ token }) => {
         connection.on("ItemDeleted", onItemDeleted);
 
         fetchListDetails();
+        joinGroupIfNeeded();
 
         return () => {
             connection.off("ItemAdded", onItemAdded);
             connection.off("ItemDeleted", onItemDeleted);
         };
-    }, [connection, fetchListDetails]);
+    }, [connection, fetchListDetails, joinedGroups, listId]);
 
     const handleBack = () => {
         navigate('/');

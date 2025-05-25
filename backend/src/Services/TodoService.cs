@@ -96,10 +96,26 @@ public class TodoService(
     {
         try
         {
+            // Delete items within the list before deleting list
+            var items = context.TodoItems.Where(i => i.TodoListId == list.Id).ToList();
+
+            foreach (var item in items)
+            {
+                var result = await DeleteItemFromListAsync(list, item);
+                if (!result.Success)
+                {
+                    logger.LogWarning("Failed to delete item {ItemId} from list {ListId}", item.Id, list.Id);
+                    return new TodoListOutputDto
+                    {
+                        Message = "Failed to delete todo list because items could not be deleted",
+                        Success = false
+                    };
+                }
+            }
+
             context.TodoLists.Remove(list);
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListDeleted", list);
-            logger.LogInformation("Broadcasting ListDeleted to group {Group}", list.Id);
             return new TodoListOutputDto
             {
                 List = list,
