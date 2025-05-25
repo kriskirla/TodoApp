@@ -1,5 +1,10 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import {
+    BrowserRouter as Router,
+    Routes,
+    Route,
+    Navigate,
+} from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { ToastContainer } from 'material-react-toastify';
 import 'material-react-toastify/dist/ReactToastify.css';
@@ -9,11 +14,16 @@ import TodoDetailPage from './components/TodoListDetailPage';
 import * as authApi from './api/auth';
 import { SignalRProvider } from './contexts/SignalRContext';
 
-const isTokenExpired = (token) => {
+interface JwtPayload {
+    exp: number;
+    'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier': string;
+}
+
+const isTokenExpired = (token: string | null): boolean => {
     if (!token) return true;
 
     try {
-        const { exp } = jwtDecode(token);
+        const { exp } = jwtDecode <JwtPayload> (token);
         return !exp || Date.now() >= exp * 1000;
     } catch {
         return true;
@@ -21,7 +31,7 @@ const isTokenExpired = (token) => {
 };
 
 const App = () => {
-    const [token, setToken] = useState(localStorage.getItem('token'));
+    const [token, setToken] = useState <string | null> (localStorage.getItem('token'));
 
     useEffect(() => {
         const validateTokenAndUser = async () => {
@@ -31,10 +41,11 @@ const App = () => {
             }
 
             try {
-                const decoded = jwtDecode(token);
-                const userId = decoded[
+                const decoded = jwtDecode <JwtPayload> (token);
+                const userId =
+                    decoded[
                     'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'
-                ];
+                    ];
                 await authApi.getUserById(userId);
             } catch (err) {
                 console.error('Token invalid or user not found:', err);
@@ -54,16 +65,17 @@ const App = () => {
         setToken(null);
     };
 
-    const onLoginSuccess = (token) => {
+    const onLoginSuccess = (newToken: string) => {
         if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
         }
-        localStorage.setItem('token', token);
-        setToken(token);
+
+        localStorage.setItem('token', newToken);
+        setToken(newToken);
     };
 
     return (
-        <SignalRProvider token={token}>
+        <SignalRProvider token={token!}>
             <Router>
                 <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
                 <Routes>

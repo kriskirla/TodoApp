@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useContext } from 'react';
+import { useCallback, useEffect, useState, KeyboardEvent, ChangeEvent } from 'react';
 import {
     List,
     ListItem,
@@ -20,20 +20,26 @@ import { toast } from 'material-react-toastify';
 import { useNavigate } from 'react-router-dom';
 import * as authApi from '../api/auth';
 import * as todoApi from '../api/todo';
-import { SignalRContext } from '../contexts/SignalRContext';
+import { TodoListOutputDto, TodoList, User, Permission } from '../types'
+import { useSignalR } from '../hooks/useSignalR';
 
-const TodoListPage = ({ token }) => {
-    const { connection, joinedGroups } = useContext(SignalRContext);
-    const [lists, setLists] = useState([]);
-    const [newListTitle, setNewListTitle] = useState('');
-    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-    const [listIdToDelete, setListIdToDelete] = useState(null);
-    const [shareDialogOpen, setShareDialogOpen] = useState(false);
-    const [dialogMode, setDialogMode] = useState('share');
-    const [selectedListId, setSelectedListId] = useState(null);
-    const [shareEmail, setShareEmail] = useState('');
-    const [permission, setPermission] = useState('View');
-    const [error, setError] = useState(null);
+interface TodoListPageProps {
+    token: string;
+}
+
+const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
+    const [lists, setLists] = useState<TodoList[]>([]);
+    const [newListTitle, setNewListTitle] = useState<string>('');
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState<boolean>(false);
+    const [listIdToDelete, setListIdToDelete] = useState<string | null>(null);
+    const [shareDialogOpen, setShareDialogOpen] = useState<boolean>(false);
+    const [dialogMode, setDialogMode] = useState<'share' | 'unshare'>('share');
+    const [selectedListId, setSelectedListId] = useState<string | null>(null);
+    const [shareEmail, setShareEmail] = useState<string>('');
+    const [permission, setPermission] = useState<Permission>(Permission.View);
+    const [error, setError] = useState<string | null>(null);
+    const { connection, joinedGroups } = useSignalR();
+
     const navigate = useNavigate();
 
     const fetchLists = useCallback(async () => {
@@ -50,29 +56,28 @@ const TodoListPage = ({ token }) => {
     useEffect(() => {
         if (!connection) return;
 
-        // Event handlers
-        const showToastAndRefresh = (msg) => {
+        const showToastAndRefresh = (msg: string) => {
             toast.info(msg);
             fetchLists();
         };
 
         const onListCreated = () => showToastAndRefresh("A list was created");
         const onListUpdated = () => showToastAndRefresh("A list was updated");
-        const onListDeleted = async (list) => {
+        const onListDeleted = async (list: TodoList) => {
             showToastAndRefresh("A list was deleted");
             if (joinedGroups.current.has(list.id)) {
                 await connection.invoke("LeaveListGroup", list.id.toString());
                 joinedGroups.current.delete(list.id);
             }
         };
-        const onListShared = async (list) => {
+        const onListShared = async (list: TodoList) => {
             showToastAndRefresh("A list was shared with you");
             if (!joinedGroups.current.has(list.id)) {
                 await connection.invoke("JoinListGroup", list.id.toString());
                 joinedGroups.current.add(list.id);
             }
         };
-        const onListUnshared = async (list) => {
+        const onListUnshared = async (list: TodoList) => {
             showToastAndRefresh("A list was unshared");
             if (joinedGroups.current.has(list.id)) {
                 await connection.invoke("LeaveListGroup", list.id.toString());
@@ -86,7 +91,6 @@ const TodoListPage = ({ token }) => {
         connection.on("ListShared", onListShared);
         connection.on("ListUnshared", onListUnshared);
 
-        // Initial fetch & join all existing lists once on mount
         (async () => {
             const data = await todoApi.getAllListsByUser(token);
             setLists(data);
@@ -107,15 +111,15 @@ const TodoListPage = ({ token }) => {
         };
     }, [connection, fetchLists, joinedGroups, token]);
 
-
     const handleCreateList = async () => {
         if (!newListTitle.trim()) return;
         setError(null);
         try {
-            const createdList = await todoApi.createList({ title: newListTitle }, token);
-            if (connection.current && createdList?.id && !joinedGroups.current.has(createdList.id)) {
-                await connection.current.invoke("JoinListGroup", createdList.id.toString());
-                joinedGroups.current.add(createdList.id);
+            const result: TodoListOutputDto = await todoApi.createList({ title: newListTitle }, token);
+
+            if (connection && result.list.id && !joinedGroups.current.has(result.list.id)) {
+                await connection.invoke("JoinListGroup", result.list.id.toString());
+                joinedGroups.current.add(result.list.id);
             }
             setNewListTitle('');
             fetchLists();
@@ -125,7 +129,8 @@ const TodoListPage = ({ token }) => {
         }
     };
 
-    const handleDeleteList = async (listId) => {
+    const handleDeleteList = async (listId: string | null) => {
+        if (listId === null) return;
         setError(null);
         try {
             await todoApi.deleteList(listId, token);
@@ -136,20 +141,16 @@ const TodoListPage = ({ token }) => {
     };
 
     const handleShareList = async () => {
-        if (!shareEmail.trim()) return;
+        if (!shareEmail.trim() || selectedListId === null) return;
         setError(null);
         try {
-            const user = await authApi.getUserByEmail(shareEmail);
-            const userId = user.id;
+            const user: User = await authApi.getUserByEmail(shareEmail);
 
-            // Map permission string to enum integer
-            const permissionEnum = permission === 'Edit' ? 1 : 0;
-
-            await todoApi.shareList(selectedListId, userId, permissionEnum, token);
+            await todoApi.shareList(selectedListId, user.id, permission, token);
 
             setShareDialogOpen(false);
             setShareEmail('');
-            setPermission('View');
+            setPermission(Permission.View);
         } catch (err) {
             console.error('Failed to share list:', err);
             setError('Failed to share list.');
@@ -157,15 +158,12 @@ const TodoListPage = ({ token }) => {
     };
 
     const handleUnshareList = async () => {
-        if (!shareEmail.trim()) return;
+        if (!shareEmail.trim() || selectedListId === null) return;
         setError(null);
         try {
-            // Get user by email
-            const user = await authApi.getUserByEmail(shareEmail);
-            const userId = user.id;
+            const user: User = await authApi.getUserByEmail(shareEmail);
 
-            // Unshare list with user
-            await todoApi.unshareList(selectedListId, userId, token);
+            await todoApi.unshareList(selectedListId, user.id, token);
 
             setShareDialogOpen(false);
             setShareEmail('');
@@ -173,9 +171,9 @@ const TodoListPage = ({ token }) => {
             console.error('Failed to unshare list:', err);
             setError('Failed to unshare list.');
         }
-    }
+    };
 
-    const handleViewDetails = (listId) => {
+    const handleViewDetails = (listId: string) => {
         navigate(`/list/${listId}`);
     };
 
@@ -250,8 +248,8 @@ const TodoListPage = ({ token }) => {
                     variant="outlined"
                     fullWidth
                     value={newListTitle}
-                    onChange={(e) => setNewListTitle(e.target.value)}
-                    onKeyDown={(e) => {
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setNewListTitle(e.target.value)}
+                    onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                         if (e.key === 'Enter') {
                             handleCreateList();
                             e.preventDefault();
@@ -287,7 +285,6 @@ const TodoListPage = ({ token }) => {
                 </DialogActions>
             </Dialog>
 
-
             <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)}>
                 <DialogTitle>{dialogMode === 'share' ? 'Share List' : 'Unshare List'}</DialogTitle>
                 <DialogContent>
@@ -295,10 +292,10 @@ const TodoListPage = ({ token }) => {
                         label="User Email"
                         variant="outlined"
                         value={shareEmail}
-                        onChange={(e) => setShareEmail(e.target.value)}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setShareEmail(e.target.value)}
                         fullWidth
                         autoFocus
-                        onKeyDown={(e) => {
+                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                             if (e.key === 'Enter') {
                                 if (dialogMode === 'share') {
                                     handleShareList();
@@ -315,10 +312,20 @@ const TodoListPage = ({ token }) => {
                             <RadioGroup
                                 row
                                 value={permission}
-                                onChange={(e) => setPermission(e.target.value)}
+                                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                                    setPermission(Number(e.target.value) as Permission)
+                                }
                             >
-                                <FormControlLabel value="View" control={<Radio />} label="View" />
-                                <FormControlLabel value="Edit" control={<Radio />} label="Edit" />
+                                <FormControlLabel
+                                    value={Permission.View}
+                                    control={<Radio />}
+                                    label="View"
+                                />
+                                <FormControlLabel
+                                    value={Permission.Edit}
+                                    control={<Radio />}
+                                    label="Edit"
+                                />
                             </RadioGroup>
                         </>
                     )}
@@ -337,7 +344,7 @@ const TodoListPage = ({ token }) => {
                 </DialogActions>
             </Dialog>
         </Box>
-    )
+    );
 };
 
 export default TodoListPage;

@@ -1,29 +1,31 @@
-import { useState } from 'react';
+import { useState, ChangeEvent } from 'react';
 import { TextField, Button, Container, Typography } from '@mui/material';
 import { createUser, login } from '../api/auth';
+import { LoginOutputDto  } from '../types';
 
-const LoginPage = ({ onLogin }) => {
-    const [email, setEmail] = useState('');
-    const [error, setError] = useState(null);
+interface LoginPageProps {
+    onLogin: (token: string) => void;
+}
 
-    const handleSubmit = async () => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+    const [email, setEmail] = useState<string>('');
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSubmit = async (): Promise<void> => {
         setError(null);
         try {
-            // Going to assume there's no registration process
-            // If the user doesn't exist, create them
+            // Create user and login. Backend will handle gracefully if user already exists
             await createUser(email);
-
-            // Login user
-            const data = await login(email);
-            const token = data.token || data.Token;
-            
-            // Store and persist token
-            localStorage.setItem('token', token);
-            onLogin(token);
+            const result: LoginOutputDto = await login(email);
+            onLogin(result.token);
         } catch (err) {
             console.error('Authentication failed:', err);
             setError('Authentication failed. Please try again.');
         }
+    };
+
+    const handleChange = (e: ChangeEvent<HTMLInputElement>): void => {
+        setEmail(e.target.value);
     };
 
     return (
@@ -36,7 +38,7 @@ const LoginPage = ({ onLogin }) => {
                 variant="outlined"
                 fullWidth
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={handleChange}
                 margin="normal"
             />
             {error && (

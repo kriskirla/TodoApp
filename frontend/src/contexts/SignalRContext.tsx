@@ -1,13 +1,30 @@
-import { createContext, useState, useEffect, useRef } from 'react';
+import {
+    createContext,
+    useState,
+    useEffect,
+    useRef,
+    ReactNode,
+    MutableRefObject
+} from 'react';
+import { HubConnection } from '@microsoft/signalr';
 import { startConnection } from '../services/signalRService';
 
-export const SignalRContext = createContext(null);
+interface SignalRContextType {
+    connection: HubConnection | null;
+    joinedGroups: MutableRefObject<Set<string>>;
+}
 
-export const SignalRProvider = ({ token, children }) => {
-    const [connection, setConnection] = useState(null);
-    const joinedGroups = useRef(new Set());
+export const SignalRContext = createContext<SignalRContextType>(null as any);
 
-    const connectionRef = useRef(null);
+interface SignalRProviderProps {
+    token: string;
+    children: ReactNode;
+}
+
+export const SignalRProvider: React.FC<SignalRProviderProps> = ({ token, children }) => {
+    const [connection, setConnection] = useState<HubConnection | null>(null);
+    const joinedGroups = useRef<Set<string>>(new Set());
+    const connectionRef = useRef<HubConnection | null>(null);
 
     useEffect(() => {
         if (!token) return;
@@ -42,9 +59,9 @@ export const SignalRProvider = ({ token, children }) => {
         };
     }, [token]);
 
-    // Expose connection and joinedGroups (for group join/leave management)
     return (
-        <SignalRContext.Provider value={{ connection, joinedGroups }}>
+        <SignalRContext.Provider value={{ connection, joinedGroups }
+        }>
             {children}
         </SignalRContext.Provider>
     );

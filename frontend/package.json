@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@types/react": "^18.2.49",
+    "@types/react-dom": "^19.1.5",
     "postcss-selector-parser": "^6.1.2",
     "typescript": "^5.4.5"
   },

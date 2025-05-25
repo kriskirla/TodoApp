@@ -1,8 +1,8 @@
 import * as signalR from "@microsoft/signalr";
 
-let connection;
+let connection: signalR.HubConnection | null = null;
 
-export const startConnection = async (token) => {
+export const startConnection = async (token: string): Promise<signalR.HubConnection> => {
     connection = new signalR.HubConnectionBuilder()
         .withUrl("http://localhost:5286/todohub", {
             accessTokenFactory: () => token
@@ -14,4 +14,6 @@ export const startConnection = async (token) => {
     return connection;
 };
 
-export const getConnection = () => connection;
+export const getConnection = (): signalR.HubConnection | null => {
+    return connection;
+};
