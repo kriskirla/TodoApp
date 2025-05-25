@@ -47,10 +47,15 @@ export async function deleteItem(listId, itemId, token) {
     return response.data; // TodoListOutputDto
 }
 
-export async function shareList(listId, userId, token) {
-    const response = await axios.post(`${API_BASE_URL}/share/${listId}`, { userId }, authHeaders(token));
+export async function shareList(listId, userId, permission, token) {
+    const response = await axios.post(
+        `${API_BASE_URL}/share/${listId}`,
+        { userId, permission },
+        authHeaders(token)
+    );
     return response.data; // TodoListOutputDto
 }
+
 
 export async function unshareList(listId, userId, token) {
     const response = await axios.post(`${API_BASE_URL}/unshare/${listId}`, { userId }, authHeaders(token));

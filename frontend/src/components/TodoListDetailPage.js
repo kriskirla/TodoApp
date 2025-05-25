@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { List, ListItem, ListItemText, TextField, Button, Typography, Box } from '@mui/material';
+import { toast } from 'material-react-toastify';
 import * as todoApi from '../api/todo';
+import { SignalRContext } from '../contexts/SignalRContext';
 
 const TodoListDetailPage = ({ token }) => {
     const API_BASE_URL = 'http://localhost:5286';
@@ -12,6 +14,7 @@ const TodoListDetailPage = ({ token }) => {
     const [error, setError] = useState(null);
     const navigate = useNavigate();
     const fileInputRef = useRef();
+    const { connection } = useContext(SignalRContext);
 
     const fetchListDetails = useCallback(async () => {
         setError(null);
@@ -25,12 +28,36 @@ const TodoListDetailPage = ({ token }) => {
     }, [listId, token]);
 
     useEffect(() => {
+        if (!connection) return;
+
+        const showToastAndRefresh = (msg) => {
+            toast.info(msg);
+            fetchListDetails();
+        };
+
+        const onItemAdded = () => showToastAndRefresh("An item was added");
+        const onItemDeleted = () => showToastAndRefresh("An item was deleted");
+
+        connection.on("ItemAdded", onItemAdded);
+        connection.on("ItemDeleted", onItemDeleted);
+
         fetchListDetails();
-    }, [fetchListDetails]);
+
+        return () => {
+            connection.off("ItemAdded", onItemAdded);
+            connection.off("ItemDeleted", onItemDeleted);
+        };
+    }, [connection, fetchListDetails]);
 
     const handleBack = () => {
         navigate('/');
     };
+
+    // In case list is deleted while other used is in it
+    if (!list) {
+        navigate('/');
+        return null;
+    }
 
     const handleAddItem = async () => {
         if (!newItemTitle.trim()) return;
@@ -48,8 +75,6 @@ const TodoListDetailPage = ({ token }) => {
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
-
-            fetchListDetails();
         } catch (err) {
             console.error('Failed to add item:', err);
             setError('Failed to add item.');
@@ -60,15 +85,11 @@ const TodoListDetailPage = ({ token }) => {
         setError(null);
         try {
             await todoApi.deleteItem(listId, itemId, token);
-            fetchListDetails();
         } catch (err) {
             console.error('Failed to delete item:', err);
             setError('Failed to delete item.');
         }
     };
-
-    if (error) return <Typography color="error">{error}</Typography>;
-    if (!list) return null;
 
     return (
         <Box maxWidth={600} mx="auto" p={2}>
@@ -79,6 +100,12 @@ const TodoListDetailPage = ({ token }) => {
             <Typography variant="h4" gutterBottom>
                 {list.title}
             </Typography>
+
+            {error && (
+                <Typography color="error" gutterBottom>
+                    {error}
+                </Typography>
+            )}
 
             <List>
                 {list.items.map((item) => (
@@ -131,7 +158,7 @@ const TodoListDetailPage = ({ token }) => {
 
                 <input
                     type="file"
-                    accept="image/*,video/mp4,video/mov"
+                    accept="image/*,video/mp4,.mov"
                     ref={fileInputRef}
                     onChange={(e) => setNewItemMedia(e.target.files[0] || null)}
                     style={{ cursor: 'pointer' }}

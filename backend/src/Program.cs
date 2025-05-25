@@ -82,6 +82,20 @@ internal class Program
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
             };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/todohub"))
+                    {
+                        context.Token = accessToken;
+                    }
+                    return Task.CompletedTask;
+                }
+            };
         });
         builder.Services.AddSingleton(new JwtUtil(secretKey));
         builder.Services.AddAuthorization();
@@ -94,7 +108,8 @@ internal class Program
                 builder
                     .WithOrigins("http://localhost:3000")
                     .AllowAnyMethod()
-                    .AllowAnyHeader();
+                    .AllowAnyHeader()
+                    .AllowCredentials(); // This is required by SignalR
             });
         });
 
@@ -124,10 +139,12 @@ internal class Program
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "Todo API v1");
             c.RoutePrefix = string.Empty;
         });
-        app.UseCors("AllowFrontend");
+
         app.UseRouting();
+        app.UseCors("AllowFrontend");
         app.UseAuthentication();
         app.UseAuthorization();
+        app.MapHub<TodoHub>("/todohub");
         app.MapControllers();
         app.Run();
     }

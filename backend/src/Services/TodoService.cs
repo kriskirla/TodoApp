@@ -19,6 +19,7 @@ public class TodoService(
             list.Id = Guid.NewGuid();
             context.TodoLists.Add(list);
             await context.SaveChangesAsync();
+            await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListCreated");
             return new TodoListOutputDto
             {
                 List = list,
@@ -98,6 +99,7 @@ public class TodoService(
             context.TodoLists.Remove(list);
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListDeleted", list);
+            logger.LogInformation("Broadcasting ListDeleted to group {Group}", list.Id);
             return new TodoListOutputDto
             {
                 List = list,
@@ -199,7 +201,6 @@ public class TodoService(
             };
         }
     }
-
 
     public async Task<TodoListOutputDto> ShareListAsync(TodoList list, ShareRequest request)
     {

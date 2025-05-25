@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useContext } from 'react';
 import {
     List,
     ListItem,
@@ -11,13 +11,19 @@ import {
     DialogActions,
     Typography,
     Box,
-    ButtonGroup
+    ButtonGroup,
+    RadioGroup,
+    FormControlLabel,
+    Radio
 } from '@mui/material';
+import { toast } from 'material-react-toastify';
 import { useNavigate } from 'react-router-dom';
 import * as authApi from '../api/auth';
 import * as todoApi from '../api/todo';
+import { SignalRContext } from '../contexts/SignalRContext';
 
 const TodoListPage = ({ token }) => {
+    const { connection, joinedGroups } = useContext(SignalRContext);
     const [lists, setLists] = useState([]);
     const [newListTitle, setNewListTitle] = useState('');
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -26,6 +32,7 @@ const TodoListPage = ({ token }) => {
     const [dialogMode, setDialogMode] = useState('share');
     const [selectedListId, setSelectedListId] = useState(null);
     const [shareEmail, setShareEmail] = useState('');
+    const [permission, setPermission] = useState('View');
     const [error, setError] = useState(null);
     const navigate = useNavigate();
 
@@ -35,20 +42,81 @@ const TodoListPage = ({ token }) => {
             const data = await todoApi.getAllListsByUser(token);
             setLists(data);
         } catch (err) {
-            console.error('Failed to fetch list:', err);
+            console.error('Failed to fetch lists:', err);
             setError('Failed to fetch lists.');
         }
     }, [token]);
 
     useEffect(() => {
-        fetchLists();
-    }, [fetchLists]);
+        if (!connection) return;
+
+        // Event handlers
+        const showToastAndRefresh = (msg) => {
+            toast.info(msg);
+            fetchLists();
+        };
+
+        const onListCreated = () => showToastAndRefresh("A list was created");
+        const onListUpdated = () => showToastAndRefresh("A list was updated");
+        const onListDeleted = async (list) => {
+            showToastAndRefresh("A list was deleted");
+            if (joinedGroups.current.has(list.id)) {
+                await connection.invoke("LeaveListGroup", list.id.toString());
+                joinedGroups.current.delete(list.id);
+            }
+        };
+        const onListShared = async (list) => {
+            showToastAndRefresh("A list was shared with you");
+            if (!joinedGroups.current.has(list.id)) {
+                await connection.invoke("JoinListGroup", list.id.toString());
+                joinedGroups.current.add(list.id);
+            }
+        };
+        const onListUnshared = async (list) => {
+            showToastAndRefresh("A list was unshared");
+            if (joinedGroups.current.has(list.id)) {
+                await connection.invoke("LeaveListGroup", list.id.toString());
+                joinedGroups.current.delete(list.id);
+            }
+        };
+
+        connection.on("ListCreated", onListCreated);
+        connection.on("ListUpdated", onListUpdated);
+        connection.on("ListDeleted", onListDeleted);
+        connection.on("ListShared", onListShared);
+        connection.on("ListUnshared", onListUnshared);
+
+        // Initial fetch & join all existing lists once on mount
+        (async () => {
+            const data = await todoApi.getAllListsByUser(token);
+            setLists(data);
+            for (const list of data) {
+                if (!joinedGroups.current.has(list.id)) {
+                    await connection.invoke("JoinListGroup", list.id.toString());
+                    joinedGroups.current.add(list.id);
+                }
+            }
+        })();
+
+        return () => {
+            connection.off("ListCreated", onListCreated);
+            connection.off("ListUpdated", onListUpdated);
+            connection.off("ListDeleted", onListDeleted);
+            connection.off("ListShared", onListShared);
+            connection.off("ListUnshared", onListUnshared);
+        };
+    }, [connection, fetchLists, joinedGroups, token]);
+
 
     const handleCreateList = async () => {
         if (!newListTitle.trim()) return;
         setError(null);
         try {
-            await todoApi.createList({ title: newListTitle }, token);
+            const createdList = await todoApi.createList({ title: newListTitle }, token);
+            if (connection.current && createdList?.id && !joinedGroups.current.has(createdList.id)) {
+                await connection.current.invoke("JoinListGroup", createdList.id.toString());
+                joinedGroups.current.add(createdList.id);
+            }
             setNewListTitle('');
             fetchLists();
         } catch (err) {
@@ -61,7 +129,6 @@ const TodoListPage = ({ token }) => {
         setError(null);
         try {
             await todoApi.deleteList(listId, token);
-            fetchLists();
         } catch (err) {
             console.error('Failed to delete list:', err);
             setError('Failed to delete list.');
@@ -72,15 +139,17 @@ const TodoListPage = ({ token }) => {
         if (!shareEmail.trim()) return;
         setError(null);
         try {
-            // Get user by email
             const user = await authApi.getUserByEmail(shareEmail);
             const userId = user.id;
 
-            // Share list with user (assuming permission is always 'View')
-            await todoApi.shareList(selectedListId, userId, token);
+            // Map permission string to enum integer
+            const permissionEnum = permission === 'Edit' ? 1 : 0;
+
+            await todoApi.shareList(selectedListId, userId, permissionEnum, token);
 
             setShareDialogOpen(false);
             setShareEmail('');
+            setPermission('View');
         } catch (err) {
             console.error('Failed to share list:', err);
             setError('Failed to share list.');
@@ -189,9 +258,9 @@ const TodoListPage = ({ token }) => {
                         }
                     }}
                 />
-                <Button 
-                    variant="contained" 
-                    color="primary" 
+                <Button
+                    variant="contained"
+                    color="primary"
                     disabled={!newListTitle.trim()}
                     onClick={handleCreateList}>
                     Create
@@ -240,6 +309,19 @@ const TodoListPage = ({ token }) => {
                             }
                         }}
                     />
+                    {dialogMode === 'share' && (
+                        <>
+                            <Typography sx={{ mt: 2, mb: 1 }}>Permission</Typography>
+                            <RadioGroup
+                                row
+                                value={permission}
+                                onChange={(e) => setPermission(e.target.value)}
+                            >
+                                <FormControlLabel value="View" control={<Radio />} label="View" />
+                                <FormControlLabel value="Edit" control={<Radio />} label="Edit" />
+                            </RadioGroup>
+                        </>
+                    )}
                 </DialogContent>
                 <DialogActions>
                     <Button
@@ -255,7 +337,7 @@ const TodoListPage = ({ token }) => {
                 </DialogActions>
             </Dialog>
         </Box>
-    );
+    )
 };
 
 export default TodoListPage;
