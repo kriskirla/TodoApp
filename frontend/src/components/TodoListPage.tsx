@@ -61,37 +61,27 @@ const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
             fetchLists();
         };
 
-        const onListCreated = async (list: TodoList) => {
-            showToastAndRefresh("A list was created");
+        const JoinAndRefresh = async (msg: string, list: TodoList) => {
             if (!joinedGroups.current.has(list.id)) {
                 await connection.invoke("JoinListGroup", list.id.toString());
                 joinedGroups.current.add(list.id);
             }
+            showToastAndRefresh(msg);
         };
 
+        const LeaveAndRefresh = async (msg: string, list: TodoList) => {
+            if (joinedGroups.current.has(list.id)) {
+                await connection.invoke("LeaveListGroup", list.id.toString());
+                joinedGroups.current.delete(list.id);
+            }
+            showToastAndRefresh(msg);
+        };
+
+        const onListCreated = async (list: TodoList) => JoinAndRefresh("A list was created", list);
         const onListUpdated = () => showToastAndRefresh("A list was updated");
-
-        const onListDeleted = async (list: TodoList) => {
-            showToastAndRefresh("A list was deleted");
-            if (joinedGroups.current.has(list.id)) {
-                await connection.invoke("LeaveListGroup", list.id.toString());
-                joinedGroups.current.delete(list.id);
-            }
-        };
-        const onListShared = async (list: TodoList) => {
-            showToastAndRefresh("A list was shared with you");
-            if (!joinedGroups.current.has(list.id)) {
-                await connection.invoke("JoinListGroup", list.id.toString());
-                joinedGroups.current.add(list.id);
-            }
-        };
-        const onListUnshared = async (list: TodoList) => {
-            showToastAndRefresh("A list was unshared");
-            if (joinedGroups.current.has(list.id)) {
-                await connection.invoke("LeaveListGroup", list.id.toString());
-                joinedGroups.current.delete(list.id);
-            }
-        };
+        const onListDeleted = async (list: TodoList) => LeaveAndRefresh("A list was deleted", list);
+        const onListShared = async (list: TodoList) => JoinAndRefresh("A list was shared with you", list);
+        const onListUnshared = async (list: TodoList) => LeaveAndRefresh("A list was unshared with you", list);
 
         connection.on("ListCreated", onListCreated);
         connection.on("ListUpdated", onListUpdated);
