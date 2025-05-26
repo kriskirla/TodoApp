@@ -19,7 +19,7 @@ public class TodoService(
             list.Id = Guid.NewGuid();
             context.TodoLists.Add(list);
             await context.SaveChangesAsync();
-            await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListCreated");
+            await hubContext.Clients.User(list.OwnerId.ToString()).SendAsync("ListCreated", list);
             return new TodoListOutputDto
             {
                 List = list,

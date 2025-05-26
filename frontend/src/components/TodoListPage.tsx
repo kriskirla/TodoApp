@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, KeyboardEvent, ChangeEvent } from 'react';
+import { useEffect, useState, KeyboardEvent, ChangeEvent } from 'react';
 import {
     List,
     ListItem,
@@ -20,7 +20,7 @@ import { toast } from 'material-react-toastify';
 import { useNavigate } from 'react-router-dom';
 import * as authApi from '../api/auth';
 import * as todoApi from '../api/todo';
-import { TodoListOutputDto, TodoList, User, Permission } from '../types'
+import { TodoList, User, Permission } from '../types'
 import { useSignalR } from '../hooks/useSignalR';
 
 interface TodoListPageProps {
@@ -42,27 +42,35 @@ const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
 
     const navigate = useNavigate();
 
-    const fetchLists = useCallback(async () => {
-        setError(null);
-        try {
-            const data = await todoApi.getAllListsByUser(token);
-            setLists(data);
-        } catch (err) {
-            console.error('Failed to fetch lists:', err);
-            setError('Failed to fetch lists.');
-        }
-    }, [token]);
-
     useEffect(() => {
         if (!connection) return;
+
+        const fetchLists = async () => {
+            setError(null);
+            try {
+                const data = await todoApi.getAllListsByUser(token);
+                setLists(data);
+            } catch (err) {
+                console.error('Failed to fetch lists:', err);
+                setError('Failed to fetch lists.');
+            }
+        };
 
         const showToastAndRefresh = (msg: string) => {
             toast.info(msg);
             fetchLists();
         };
 
-        const onListCreated = () => showToastAndRefresh("A list was created");
+        const onListCreated = async (list: TodoList) => {
+            showToastAndRefresh("A list was created");
+            if (!joinedGroups.current.has(list.id)) {
+                await connection.invoke("JoinListGroup", list.id.toString());
+                joinedGroups.current.add(list.id);
+            }
+        };
+
         const onListUpdated = () => showToastAndRefresh("A list was updated");
+
         const onListDeleted = async (list: TodoList) => {
             showToastAndRefresh("A list was deleted");
             if (joinedGroups.current.has(list.id)) {
@@ -109,20 +117,14 @@ const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
             connection.off("ListShared", onListShared);
             connection.off("ListUnshared", onListUnshared);
         };
-    }, [connection, fetchLists, joinedGroups, token]);
+    }, [connection, joinedGroups, token]);
 
     const handleCreateList = async () => {
         if (!newListTitle.trim()) return;
         setError(null);
         try {
-            const result: TodoListOutputDto = await todoApi.createList({ title: newListTitle }, token);
-
-            if (connection && result.list.id && !joinedGroups.current.has(result.list.id)) {
-                await connection.invoke("JoinListGroup", result.list.id.toString());
-                joinedGroups.current.add(result.list.id);
-            }
+            await todoApi.createList({ title: newListTitle }, token);
             setNewListTitle('');
-            fetchLists();
         } catch (err) {
             console.error('Failed to create list:', err);
             setError('Failed to create list.');
