@@ -9,6 +9,7 @@ import { jwtDecode } from 'jwt-decode';
 import { ToastContainer } from 'material-react-toastify';
 import 'material-react-toastify/dist/ReactToastify.css';
 import LoginPage from './components/LoginPage';
+import RegisterPage from './components/RegisterPage';
 import TodoListPage from './components/TodoListPage';
 import TodoDetailPage from './components/TodoListDetailPage';
 import * as authApi from './api/auth';
@@ -23,7 +24,7 @@ const isTokenExpired = (token: string | null): boolean => {
     if (!token) return true;
 
     try {
-        const { exp } = jwtDecode <JwtPayload> (token);
+        const { exp } = jwtDecode<JwtPayload>(token);
         return !exp || Date.now() >= exp * 1000;
     } catch {
         return true;
@@ -31,7 +32,7 @@ const isTokenExpired = (token: string | null): boolean => {
 };
 
 const App = () => {
-    const [token, setToken] = useState <string | null> (localStorage.getItem('token'));
+    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
 
     useEffect(() => {
         const validateTokenAndUser = async () => {
@@ -41,7 +42,7 @@ const App = () => {
             }
 
             try {
-                const decoded = jwtDecode <JwtPayload> (token);
+                const decoded = jwtDecode<JwtPayload>(token);
                 const userId =
                     decoded[
                     'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'
@@ -80,7 +81,11 @@ const App = () => {
                 <ToastContainer position="top-right" autoClose={3000} hideProgressBar />
                 <Routes>
                     {!token ? (
-                        <Route path="*" element={<LoginPage onLogin={onLoginSuccess} />} />
+                        <>
+                            <Route path="/" element={<LoginPage onLogin={onLoginSuccess} />} />
+                            <Route path="/register" element={<RegisterPage />} />
+                            <Route path="*" element={<Navigate to="/" replace />} />
+                        </>
                     ) : (
                         <>
                             <Route path="/" element={<TodoListPage token={token} />} />

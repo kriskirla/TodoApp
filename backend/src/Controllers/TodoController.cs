@@ -24,8 +24,25 @@ public class TodoController(ITodoService todoService) : BaseController
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetList(Guid listId)
+    public async Task<IActionResult> GetList(
+        Guid listId,
+        [FromQuery] AttributeType? filter,
+        [FromQuery] string? key,
+        [FromQuery] AttributeType? sort,
+        [FromQuery] OrderType? order)
     {
+        if (filter != null && sort != null)
+        {
+            return FromServiceResult(await todoService.SortFilteredListItemsAsync(listId, filter.Value, key, sort.Value, order));
+        }
+        else if (filter != null)
+        {
+            return FromServiceResult(await todoService.FilterListItemsAsync(listId, filter.Value, key));
+        }
+        else if (sort != null)
+        {
+            return FromServiceResult(await todoService.SortListItemsAsync(listId, sort.Value, order));
+        }
         return FromServiceResult(await todoService.GetListAsync(listId));
     }
 
@@ -91,21 +108,5 @@ public class TodoController(ITodoService todoService) : BaseController
     public async Task<IActionResult> GetAllListByUserId()
     {
         return FromServiceResult(await todoService.GetAllListByUserIdAsync());
-    }
-
-    [HttpGet("item/filter/{listId}/{attribute}/{key}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> FilterListItems(Guid listId, AttributeType attribute, string key)
-    {
-        return FromServiceResult(await todoService.FilterListItems(listId, attribute, key));
-    }
-
-    [HttpGet("item/sort/{listId}/{attribute}/{order}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> SortListItems(Guid listId, AttributeType attribute, OrderType order)
-    {
-        return FromServiceResult(await todoService.SortListItems(listId, attribute, order));
     }
 }

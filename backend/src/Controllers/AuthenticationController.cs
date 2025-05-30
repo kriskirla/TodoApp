@@ -39,11 +39,11 @@ public class AuthenticationController(IUserService userService) : BaseController
         return FromServiceResult(await userService.GetUserByIdAsync(id));
     }
 
-    [HttpGet("user/email/{email}")]
+    [HttpGet("user/email")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(User))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserByEmail(string email)
+    public async Task<IActionResult> GetUserByEmail([FromQuery] string email)
     {
         return FromServiceResult(await userService.GetUserByEmailAsync(email));
     }

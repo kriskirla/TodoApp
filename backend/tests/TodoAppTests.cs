@@ -234,7 +234,7 @@ public class TodoAppTests
     }
 
     [Fact]
-    public async Task FilterListItems_ShouldReturnFilteredItems_WhenValidFilterProvided()
+    public async Task FilterListItems_ShouldReturnFilteredItems()
     {
         var listId = Guid.NewGuid();
 
@@ -245,23 +245,23 @@ public class TodoAppTests
             OwnerId = _testUserId,
             Items =
             [
-                new TodoItem { Id = Guid.NewGuid(), Name = "Item1", Status = StatusType.NotStarted },
-                new TodoItem { Id = Guid.NewGuid(), Name = "Item2", Status = StatusType.Completed }
+                new TodoItem { Id = Guid.NewGuid(), Name = "Item1", Description = "Testing is great!" },
+                new TodoItem { Id = Guid.NewGuid(), Name = "Item2", Description = "Tes" }
             ]
         };
 
         _context.TodoLists.Add(todoList);
         await _context.SaveChangesAsync();
 
-        var result = await _todoService.FilterListItems(listId, AttributeType.Status, "Completed");
+        var result = await _todoService.FilterListItemsAsync(listId, AttributeType.Description, "Test");
 
         Assert.True(result.Data != null, result.Error?.Message);
         Assert.Single(result.Data.Items);
-        Assert.Equal("Item2", result.Data.Items.First().Name);
+        Assert.Equal("Item1", result.Data.Items.First().Name);
     }
 
     [Fact]
-    public async Task SortListItems_ShouldReturnSortedItems_WhenValidSortRequestProvided()
+    public async Task SortListItems_ShouldReturnSortedItems()
     {
         var listId = Guid.NewGuid();
 
@@ -283,7 +283,7 @@ public class TodoAppTests
         await _context.SaveChangesAsync();
 
         // Act
-        var result = await _todoService.SortListItems(listId, AttributeType.Name, OrderType.Descending);
+        var result = await _todoService.SortListItemsAsync(listId, AttributeType.Name, OrderType.Ascending);
 
         // Assert
         Assert.NotNull(result.Data);
@@ -293,5 +293,40 @@ public class TodoAppTests
         var expectedOrder = new List<string> { "Apple", "Banana", "Cherry" };
 
         Assert.Equal(expectedOrder, sortedNames!);
+    }
+
+    [Fact]
+    public async Task SortFilteredListItems_ShouldReturnSortedFilteredItems()
+    {
+        var listId = Guid.NewGuid();
+
+        var todoList = new TodoList
+        {
+            Id = listId,
+            Title = "Test List",
+            OwnerId = _testUserId,
+            Items =
+            [
+                new TodoItem { Id = Guid.NewGuid(), Name = "Banana", Priority = PriorityType.Critical },
+                new TodoItem { Id = Guid.NewGuid(), Name = "Apple", Priority = PriorityType.High },
+                new TodoItem { Id = Guid.NewGuid(), Name = "Cherry", Priority = PriorityType.High }
+            ]
+        };
+
+        _context.TodoLists.Add(todoList);
+        _context.TodoItems.AddRange(todoList.Items);
+        await _context.SaveChangesAsync();
+
+        // Act
+        var result = await _todoService.SortFilteredListItemsAsync(listId, AttributeType.Priority, "2", AttributeType.Name, OrderType.Ascending);
+
+        // Assert
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Items.Count);
+
+        var sortedNames = result.Data.Items.Select(i => i.Name).ToList();
+        var expectedResult = new List<string> { "Apple", "Cherry" };
+
+        Assert.Equal(expectedResult, sortedNames!);
     }
 }

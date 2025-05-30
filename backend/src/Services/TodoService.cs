@@ -1,4 +1,3 @@
-using System.Linq.Expressions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using TodoApp.Data;
@@ -21,29 +20,49 @@ public class TodoService(
     {
         [AttributeType.Name] = new AttributeAccessors
         {
-            FilterPredicate = (i, v) => i.Name == v.ToString(),
+            FilterPredicate = v => i => i.Name == v.ToString(),
             SortSelector = i => i.Name
+        },
+        [AttributeType.Description] = new AttributeAccessors
+        {
+            FilterPredicate = v => i => i.Description != null && i.Description.Contains(v.ToString()),
+            SortSelector = i => i.Description
         },
         [AttributeType.DueDate] = new AttributeAccessors
         {
-            FilterPredicate = (i, v) =>
+            FilterPredicate = v =>
             {
-                if (DateTime.TryParse(v.ToString(), out var parsed))
+                if (DateTime.TryParse(v, out var parsed))
                 {
-                    return i.DueDate == null || i.DueDate.Value.ToShortDateString() == parsed.Date.ToShortDateString();
+                    var utcDate = DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc);
+                    return i => i.DueDate == null || i.DueDate.Value.Date == utcDate;
                 }
-                return false;
+                return i => false;
             },
             SortSelector = i => i.DueDate
         },
         [AttributeType.Status] = new AttributeAccessors
         {
-            FilterPredicate = (i, v) => i.Status.ToString() == v.ToString(),
+            FilterPredicate = v =>
+            {
+                if (Enum.TryParse<StatusType>(v, out var parsed))
+                {
+                    return i => i.Status == parsed;
+                }
+                return i => false;
+            },
             SortSelector = i => i.Status
         },
         [AttributeType.Priority] = new AttributeAccessors
         {
-            FilterPredicate = (i, v) => i.Priority.ToString() == v.ToString(),
+            FilterPredicate = v =>
+            {
+                if (int.TryParse(v.ToString(), out var parsed))
+                {
+                    return i => i.Priority == (PriorityType)parsed;
+                }
+                return i => false;
+            },
             SortSelector = i => i.Priority
         }
     };
@@ -70,12 +89,12 @@ public class TodoService(
     {
         try
         {
-            return await FetchListAsync(listId);
+            return await FetchListAsync(listId, true, true, false, false);
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to fetch todo list {listId}", listId);
-            return ServiceResult<TodoList>.Unknown("Failed to fetch todolist");;
+            return ServiceResult<TodoList>.Unknown("Failed to fetch todolist"); ;
         }
     }
 
@@ -345,11 +364,11 @@ public class TodoService(
         }
     }
 
-    public async Task<ServiceResult<TodoList>> FilterListItems(Guid listId, AttributeType attribute, string key)
+    public async Task<ServiceResult<TodoList>> FilterListItemsAsync(Guid listId, AttributeType filter, string? key)
     {
         try
         {
-            var result = await FetchListAsync(listId, true, false, false, false);
+            var result = await FetchListAsync(listId, true, true, false, false);
             var list = result.Data;
 
             if (list == null)
@@ -357,11 +376,9 @@ public class TodoService(
                 return result;
             }
 
-            if (AttributeMap.TryGetValue(attribute, out var accessor))
-            {
-                list.Items = [.. list.Items.Where(i => accessor.FilterPredicate(i, key))];
-            }
-
+            var query = context.TodoItems.Where(i => i.TodoListId == listId);
+            query = FilterItemQuery(query, filter, key ?? string.Empty);
+            list.Items = await query.ToListAsync();
             return ServiceResult<TodoList>.Success(list);
         }
         catch (Exception ex)
@@ -371,31 +388,82 @@ public class TodoService(
         }
     }
 
-    public async Task<ServiceResult<TodoList>> SortListItems(Guid listId, AttributeType attribute, OrderType order)
+    public async Task<ServiceResult<TodoList>> SortListItemsAsync(Guid listId, AttributeType sort, OrderType? order)
     {
-        var result = await FetchListAsync(listId, true, false, false, false);
-        var list = result.Data;
-
-        if (list == null)
+        try
         {
-            return result;
+            var result = await FetchListAsync(listId, true, true, false, false);
+            var list = result.Data;
+
+            if (list == null)
+            {
+                return result;
+            }
+
+            var query = context.TodoItems.Where(i => i.TodoListId == listId);
+            query = SortItemQuery(query, sort, order.GetValueOrDefault());
+            list.Items = await query.ToListAsync();
+            return ServiceResult<TodoList>.Success(list);
         }
-
-        // Sorting query for items
-        var itemsQuery = context.TodoItems.Where(i => i.TodoListId == listId);
-
-        if (AttributeMap.TryGetValue(attribute, out var accessor))
+        catch (Exception ex)
         {
-            itemsQuery = order == OrderType.Descending
-                ? itemsQuery.OrderByDescending(accessor.SortSelector)
-                : itemsQuery.OrderBy(accessor.SortSelector);
+            logger.LogError(ex, "Failed to sort todo list {listId}", listId);
+            return ServiceResult<TodoList>.Unknown($"Failed to sort todo list");
         }
+    }
 
-        list.Items = await itemsQuery.ToListAsync();
-        return ServiceResult<TodoList>.Success(list);
+    public async Task<ServiceResult<TodoList>> SortFilteredListItemsAsync(
+        Guid listId,
+        AttributeType filter,
+        string? key,
+        AttributeType sort,
+        OrderType? order)
+    {
+        try
+        {
+            var result = await FetchListAsync(listId, false, false, false, false);
+            var list = result.Data;
+
+            if (list == null)
+            {
+                return result;
+            }
+
+            var query = context.TodoItems.Where(i => i.TodoListId == listId);
+            query = FilterItemQuery(query, filter, key ?? string.Empty);
+            query = SortItemQuery(query, sort, order.GetValueOrDefault());
+            list.Items = await query.ToListAsync();
+            return ServiceResult<TodoList>.Success(list);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to sort filtered todo list {listId}", listId);
+            return ServiceResult<TodoList>.Unknown($"Failed to sort filtered todo list");
+        }
     }
 
     #region Private method
+    private bool IsOwner(TodoList list)
+    {
+        return list != null && list.OwnerId == userContext.UserId;
+    }
+
+    private bool IsSharedViewOnly(TodoList list)
+    {
+        return list != null
+        && list.SharedWith.Any(
+            s => s.SharedWithUserId == userContext.UserId
+            && s.Permission == PermissionType.View);
+    }
+
+    private bool IsSharedEditPermission(TodoList list)
+    {
+        return list != null
+        && list.SharedWith.Any(
+            s => s.SharedWithUserId == userContext.UserId
+            && s.Permission == PermissionType.Edit);
+    }
+
     private async Task<ServiceResult<TodoList>> FetchListAsync(
         Guid listId,
         bool loadItem = false,
@@ -460,25 +528,24 @@ public class TodoService(
         return item;
     }
 
-    private bool IsOwner(TodoList list)
+    private static IQueryable<TodoItem> FilterItemQuery(IQueryable<TodoItem> query, AttributeType filter, string key)
     {
-        return list != null && list.OwnerId == userContext.UserId;
+        if (AttributeMap.TryGetValue(filter, out var accessor))
+        {
+            query = query.Where(accessor.FilterPredicate(key));
+        }
+        return query;
     }
 
-    private bool IsSharedViewOnly(TodoList list)
+    private static IQueryable<TodoItem> SortItemQuery(IQueryable<TodoItem> query, AttributeType sort, OrderType order)
     {
-        return list != null
-        && list.SharedWith.Any(
-            s => s.SharedWithUserId == userContext.UserId
-            && s.Permission == PermissionType.View);
-    }
-
-    private bool IsSharedEditPermission(TodoList list)
-    {
-        return list != null
-        && list.SharedWith.Any(
-            s => s.SharedWithUserId == userContext.UserId
-            && s.Permission == PermissionType.Edit);
+        if (AttributeMap.TryGetValue(sort, out var accessor))
+        {
+            query = order == OrderType.Descending
+                ? query.OrderByDescending(accessor.SortSelector)
+                : query.OrderBy(accessor.SortSelector);
+        }
+        return query;
     }
     #endregion
 }

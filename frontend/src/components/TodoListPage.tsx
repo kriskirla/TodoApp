@@ -243,8 +243,8 @@ const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setNewListTitle(e.target.value)}
                     onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                         if (e.key === 'Enter') {
-                            handleCreateList();
                             e.preventDefault();
+                            handleCreateList();
                         }
                     }}
                 />
@@ -289,12 +289,12 @@ const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
                         autoFocus
                         onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
                             if (e.key === 'Enter') {
+                                e.preventDefault();
                                 if (dialogMode === 'share') {
                                     handleShareList();
                                 } else {
                                     handleUnshareList();
                                 }
-                                e.preventDefault();
                             }
                         }}
                     />

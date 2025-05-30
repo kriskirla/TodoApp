@@ -14,6 +14,7 @@ public interface ITodoService
     Task<ServiceResult<TodoList>> ShareListAsync(Guid listId, ShareRequest request);
     Task<ServiceResult<TodoList>> UnshareListAsync(Guid listId, Guid userId);
     Task<ServiceResult<IEnumerable<TodoList>>> GetAllListByUserIdAsync();
-    Task<ServiceResult<TodoList>> FilterListItems(Guid listId, AttributeType attribute, string key);
-    Task<ServiceResult<TodoList>> SortListItems(Guid listId, AttributeType attribute, OrderType order);
+    Task<ServiceResult<TodoList>> FilterListItemsAsync(Guid listId, AttributeType filter, string? key);
+    Task<ServiceResult<TodoList>> SortListItemsAsync(Guid listId, AttributeType sort, OrderType? order);
+    Task<ServiceResult<TodoList>> SortFilteredListItemsAsync(Guid listId, AttributeType filter, string? key, AttributeType sort, OrderType? order);
 }

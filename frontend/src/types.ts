@@ -1,6 +1,14 @@
+export interface AuthenticateUserRequest {
+    email: string;
+}
+
 export interface LoginResponse {
     token: string;
     expiration: string;
+}
+
+export interface RegistrationRequest {
+    email: string;
 }
 
 export interface User {
@@ -36,7 +44,11 @@ export interface TodoListShare {
 }
 
 export interface ItemForm {
+    name: string;
     description: string;
+    dueDate: Date;
+    status: StatusType;
+    priority: PriorityType;
     media?: File | null;
 }
 
@@ -53,9 +65,10 @@ export enum Permission {
 export enum AttributeType
 {
     Name = 0,
-    DueDate = 1,
-    Status = 2,
-    Priority = 3
+    Description = 1,
+    DueDate = 2,
+    Status = 3,
+    Priority = 4
 }
 
 export enum OrderType

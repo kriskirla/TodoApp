@@ -29,12 +29,7 @@ public class Program
         builder.Services.AddScoped<IUserContext, UserContext>();
 
         // Add controllers, swagger, SignalR, DbContextPool, etc.
-        builder.Services.AddControllers()
-        .AddJsonOptions(options =>
-        {
-            // This is added to make Enum more readable
-            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-        });
+        builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen(c =>
         {
