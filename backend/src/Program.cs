@@ -53,6 +53,11 @@ public class Program
                     Array.Empty<string>()
                 }
             });
+
+            // Added swagger xml comment
+            var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+            c.IncludeXmlComments(xmlPath);
         });
 
         builder.Services.AddSignalR();
