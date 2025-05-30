@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { TodoListOutputDto, TodoList, ItemForm, Permission } from '../types'
+import { TodoList, ItemForm, Permission, AttributeType, OrderType } from '../types'
 
 const API_BASE_URL = 'http://localhost:5286/api/todo';
 
@@ -9,8 +9,8 @@ function authHeaders(token: string) {
 }
 
 // --- API Methods ---
-export async function createList(list: Partial<TodoList>, token: string): Promise<TodoListOutputDto> {
-    const response = await axios.post<TodoListOutputDto>(`${API_BASE_URL}/list/create`, list, authHeaders(token));
+export async function createList(list: Partial<TodoList>, token: string): Promise<TodoList> {
+    const response = await axios.post<TodoList>(`${API_BASE_URL}/list/create`, list, authHeaders(token));
     return response.data;
 }
 
@@ -23,13 +23,13 @@ export async function updateList(
     listId: string,
     update: Partial<TodoList>,
     token: string
-): Promise<TodoListOutputDto> {
-    const response = await axios.put<TodoListOutputDto>(`${API_BASE_URL}/list/${listId}`, update, authHeaders(token));
+): Promise<TodoList> {
+    const response = await axios.put<TodoList>(`${API_BASE_URL}/list/${listId}`, update, authHeaders(token));
     return response.data;
 }
 
-export async function deleteList(listId: string, token: string): Promise<TodoListOutputDto> {
-    const response = await axios.delete<TodoListOutputDto>(`${API_BASE_URL}/list/${listId}`, authHeaders(token));
+export async function deleteList(listId: string, token: string): Promise<TodoList> {
+    const response = await axios.delete<TodoList>(`${API_BASE_URL}/list/${listId}`, authHeaders(token));
     return response.data;
 }
 
@@ -37,14 +37,14 @@ export async function addItem(
     listId: string,
     itemForm: ItemForm,
     token: string
-): Promise<TodoListOutputDto> {
+): Promise<TodoList> {
     const formData = new FormData();
     formData.append('description', itemForm.description);
     if (itemForm.media) {
         formData.append('media', itemForm.media);
     }
 
-    const response = await axios.post<TodoListOutputDto>(
+    const response = await axios.post<TodoList>(
         `${API_BASE_URL}/item/${listId}`,
         formData,
         {
@@ -62,8 +62,8 @@ export async function deleteItem(
     listId: string,
     itemId: string,
     token: string
-): Promise<TodoListOutputDto> {
-    const response = await axios.delete<TodoListOutputDto>(
+): Promise<TodoList> {
+    const response = await axios.delete<TodoList>(
         `${API_BASE_URL}/item/${listId}/${itemId}`,
         authHeaders(token)
     );
@@ -75,9 +75,9 @@ export async function shareList(
     userId: string,
     permission: Permission,
     token: string
-): Promise<TodoListOutputDto> {
-    const response = await axios.post<TodoListOutputDto>(
-        `${API_BASE_URL}/share/${listId}`,
+): Promise<TodoList> {
+    const response = await axios.post<TodoList>(
+        `${API_BASE_URL}/list/share/${listId}`,
         { userId, permission },
         authHeaders(token)
     );
@@ -88,10 +88,9 @@ export async function unshareList(
     listId: string,
     userId: string,
     token: string
-): Promise<TodoListOutputDto> {
-    const response = await axios.post<TodoListOutputDto>(
-        `${API_BASE_URL}/unshare/${listId}`,
-        { userId },
+): Promise<TodoList> {
+    const response = await axios.delete<TodoList>(
+        `${API_BASE_URL}/list/unshare/${listId}/${userId}`,
         authHeaders(token)
     );
     return response.data;
@@ -99,5 +98,23 @@ export async function unshareList(
 
 export async function getAllListsByUser(token: string): Promise<TodoList[]> {
     const response = await axios.get<TodoList[]>(`${API_BASE_URL}/list/user`, authHeaders(token));
+    return response.data;
+}
+
+export async function filterList(
+    listId: string, 
+    attribute: AttributeType,
+    key: string,
+    token: string): Promise<TodoList> {
+    const response = await axios.get<TodoList>(`${API_BASE_URL}/item/filter/${listId}/${attribute}/${key}`, authHeaders(token));
+    return response.data;
+}
+
+export async function sortList(
+    listId: string, 
+    attribute : AttributeType,
+    order : OrderType,
+    token: string): Promise<TodoList> {
+    const response = await axios.get<TodoList>(`${API_BASE_URL}/item/sort/${listId}/${attribute}/${order}`, authHeaders(token));
     return response.data;
 }

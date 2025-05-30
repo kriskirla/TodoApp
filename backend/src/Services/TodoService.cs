@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using TodoApp.Data;
@@ -9,140 +10,166 @@ namespace TodoApp.Services;
 
 public class TodoService(
     AppDbContext context,
+    IUserContext userContext,
     IHubContext<TodoHub> hubContext,
-    ILogger<TodoService> logger) : ITodoService
+    ILogger<TodoService> logger,
+    IUserService userService) : ITodoService
 {
-    public async Task<TodoListOutputDto> CreateListAsync(TodoList list)
+    // This is a scalable approach applies new filterable/sorable attributes
+    // For more, just add within the dictionary
+    private static readonly Dictionary<AttributeType, AttributeAccessors> AttributeMap = new()
+    {
+        [AttributeType.Name] = new AttributeAccessors
+        {
+            FilterPredicate = (i, v) => i.Name == v.ToString(),
+            SortSelector = i => i.Name
+        },
+        [AttributeType.DueDate] = new AttributeAccessors
+        {
+            FilterPredicate = (i, v) =>
+            {
+                if (DateTime.TryParse(v.ToString(), out var parsed))
+                {
+                    return i.DueDate == null || i.DueDate.Value.ToShortDateString() == parsed.Date.ToShortDateString();
+                }
+                return false;
+            },
+            SortSelector = i => i.DueDate
+        },
+        [AttributeType.Status] = new AttributeAccessors
+        {
+            FilterPredicate = (i, v) => i.Status.ToString() == v.ToString(),
+            SortSelector = i => i.Status
+        },
+        [AttributeType.Priority] = new AttributeAccessors
+        {
+            FilterPredicate = (i, v) => i.Priority.ToString() == v.ToString(),
+            SortSelector = i => i.Priority
+        }
+    };
+
+    public async Task<ServiceResult<TodoList>> CreateListAsync(TodoList list)
     {
         try
         {
             list.Id = Guid.NewGuid();
+            list.OwnerId = userContext.UserId;
             context.TodoLists.Add(list);
             await context.SaveChangesAsync();
             await hubContext.Clients.User(list.OwnerId.ToString()).SendAsync("ListCreated", list);
-            return new TodoListOutputDto
-            {
-                List = list,
-                Message = "Todo list created successfully",
-                Success = true
-            };
+            return ServiceResult<TodoList>.Success(list);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to create TodoList");
-            return new TodoListOutputDto
-            {
-                Message = "Failed to create todo list",
-                Success = false
-            };
+            logger.LogError(ex, "Failed to create todo list {listId}", list.Id);
+            return ServiceResult<TodoList>.Unknown("Failed to create todo list");
         }
     }
 
-    public async Task<TodoList?> GetListAsync(Guid listId)
+    public async Task<ServiceResult<TodoList>> GetListAsync(Guid listId)
     {
         try
         {
-            // This checks if eneity is tracked before making a query to the database
-            var list = await context.TodoLists.FindAsync(listId);
+            return await FetchListAsync(listId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to fetch todo list {listId}", listId);
+            return ServiceResult<TodoList>.Unknown("Failed to fetch todolist");;
+        }
+    }
 
-            if (list != null)
+    public async Task<ServiceResult<TodoList>> UpdateListAsync(Guid listId, TodoList update)
+    {
+        try
+        {
+            var result = await FetchListAsync(listId, false, false, false, true);
+            var list = result.Data;
+
+            if (list == null)
             {
-                // Manually load navigation properties if not already loaded
-                if (!context.Entry(list).Collection(l => l.Items).IsLoaded)
-                {
-                    await context.Entry(list).Collection(l => l.Items).LoadAsync();
-                }
-
-                if (!context.Entry(list).Collection(l => l.SharedWith).IsLoaded)
-                {
-                    await context.Entry(list).Collection(l => l.SharedWith).LoadAsync();
-                }
+                return result;
             }
-            return list;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to fetch TodoList with ID {ListId}", listId);
-            return null;
-        }
-    }
 
-    public async Task<TodoListOutputDto> UpdateListAsync(TodoList list, TodoList update)
-    {
-        try
-        {
             list.Title = update.Title;
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListUpdated", list);
-            return new TodoListOutputDto
-            {
-                List = list,
-                Message = "Todo list updated successfully",
-                Success = true
-            };
+            return ServiceResult<TodoList>.Success(list);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to update TodoList with ID {ListId}", list.Id);
-            return new TodoListOutputDto
-            {
-                Message = "Failed to update todo list",
-                Success = false
-            };
+            logger.LogError(ex, "Failed to update todo list {listId}", listId);
+            return ServiceResult<TodoList>.Unknown("Failed to update todo list");
         }
     }
 
-    public async Task<TodoListOutputDto> DeleteListAsync(TodoList list)
+    public async Task<ServiceResult<TodoList>> DeleteListAsync(Guid listId)
     {
         try
         {
+            var result = await FetchListAsync(listId, false, false, true, false);
+            var list = result.Data;
+
+            if (list == null)
+            {
+                return result;
+            }
+
             // Delete items within the list before deleting list
             var items = context.TodoItems.Where(i => i.TodoListId == list.Id).ToList();
 
             foreach (var item in items)
             {
-                var result = await DeleteItemFromListAsync(list, item);
-                if (!result.Success)
+                // Ignore items that are not valid
+                if (item.Id == null)
+                {
+                    logger.LogWarning("List {listId} contains item with invalid Guid", list.Id);
+                    continue;
+                }
+
+                var deletedItem = await DeleteItem(item);
+
+                // Another log to make sure item delete is successful
+                if (deletedItem == null)
                 {
                     logger.LogWarning("Failed to delete item {ItemId} from list {ListId}", item.Id, list.Id);
-                    return new TodoListOutputDto
-                    {
-                        Message = "Failed to delete todo list because items could not be deleted",
-                        Success = false
-                    };
+                    continue;
                 }
             }
 
             context.TodoLists.Remove(list);
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ListDeleted", list);
-            return new TodoListOutputDto
-            {
-                List = list,
-                Message = "Todo list deleted successfully",
-                Success = true
-            };
+            return ServiceResult<TodoList>.Success(list);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to delete TodoList with ID {ListId}", list.Id);
-            return new TodoListOutputDto
-            {
-                Message = "Failed to delete todo list",
-                Success = false
-            };
+            logger.LogError(ex, "Failed to delete todo list {listId}", listId);
+            return ServiceResult<TodoList>.Unknown("Failed to delete todo list");
         }
     }
 
-    public async Task<TodoListOutputDto> AddItemToListAsync(TodoList list, TodoItemForm itemForm)
+    public async Task<ServiceResult<TodoList>> AddItemToListAsync(Guid listId, TodoItemForm itemForm)
     {
         try
         {
+            var result = await FetchListAsync(listId, true, true, false, true);
+            var list = result.Data;
+
+            if (list == null)
+            {
+                return result;
+            }
+
             var item = new TodoItem
             {
                 Id = Guid.NewGuid(),
+                TodoListId = list.Id,
+                Name = itemForm.Name,
                 Description = itemForm.Description,
-                TodoListId = list.Id
+                DueDate = itemForm.DueDate,
+                Status = itemForm.Status,
+                Priority = itemForm.Priority
             };
 
             if (itemForm.Media != null)
@@ -165,141 +192,293 @@ public class TodoService(
             context.TodoItems.Add(item);
             await context.SaveChangesAsync();
             await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemAdded", item);
-            return new TodoListOutputDto
-            {
-                Item = item,
-                Message = $"Item {item.Id} added successfully",
-                Success = true
-            };
+            return ServiceResult<TodoList>.Success(list);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to add item to TodoList with ID {ListId}", list.Id);
-            return new TodoListOutputDto
-            {
-                Message = "Failed to add item to todo list",
-                Success = false
-            };
+            logger.LogError(ex, "Failed to add item to todo list {listId}", listId);
+            return ServiceResult<TodoList>.Unknown("Failed to add item to todo list");
         }
     }
 
-    public async Task<TodoListOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item)
+    public async Task<ServiceResult<TodoList>> DeleteItemFromListAsync(Guid listId, Guid itemId)
     {
         try
         {
-            // Delete associated media file if it exists
-            if (!string.IsNullOrEmpty(item.MediaUrl))
+            var result = await FetchListAsync(listId, true, true, false, true);
+            var list = result.Data;
+
+            if (list == null)
             {
-                var filePath = Path.Combine(Directory.GetCurrentDirectory(), item.MediaUrl.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString()));
-                if (File.Exists(filePath))
-                {
-                    File.Delete(filePath);
-                }
+                return result;
             }
 
-            context.TodoItems.Remove(item);
-            await context.SaveChangesAsync();
-            await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemDeleted", item);
-            return new TodoListOutputDto
+            var item = list.Items.FirstOrDefault(i => i.Id == itemId);
+            if (item == null)
             {
-                Item = item,
-                Message = $"Item {item.Id} deleted successfully",
-                Success = true
-            };
+                return ServiceResult<TodoList>.NotFound("The todo item cannot be found");
+            }
+
+            await DeleteItem(item);
+            await hubContext.Clients.Group(list.Id.ToString()).SendAsync("ItemDeleted", item);
+            return ServiceResult<TodoList>.Success(list);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to delete item from TodoList with ID {ListId}", list.Id);
-            return new TodoListOutputDto
-            {
-                Message = "Failed to delete item from todo list",
-                Success = false
-            };
+            logger.LogError(ex, "Failed to delete item from todo list {listId}", listId);
+            return ServiceResult<TodoList>.Unknown("Failed to delete item from todo list");
         }
     }
 
-    public async Task<TodoListOutputDto> ShareListAsync(TodoList list, ShareRequest request)
+    public async Task<ServiceResult<TodoList>> ShareListAsync(Guid listId, ShareRequest request)
     {
         try
         {
+            if (request.UserId == Guid.Empty)
+            {
+                return ServiceResult<TodoList>.BadRequest("User ID is required");
+            }
+
+            var userResult = await userService.GetUserByIdAsync(request.UserId);
+            var user = userResult.Data;
+            if (user == null)
+            {
+                return ServiceResult<TodoList>.NotFound(userResult.Error!.Message);
+            }
+
+            // The current logic only allows list owner to share list
+            // If we decide that shared user with Edit permission can also share,
+            // just set requireOwner = false, requireEdit = true
+            var result = await FetchListAsync(listId, false, true, true, false);
+            var list = result.Data;
+
+            if (list == null)
+            {
+                return result;
+            }
+
             // Check if the user is already shared
             if (list.SharedWith.Any(s => s.SharedWithUserId == request.UserId))
             {
-                return new TodoListOutputDto
-                {
-                    Message = $"List already shared with user {request.UserId}",
-                    Success = false
-                };
+                return ServiceResult<TodoList>.BadRequest("List is already shared with user");
             }
 
-            var share = new TodoListShare
+            context.TodoListShares.Add(new TodoListShare
             {
                 Id = Guid.NewGuid(),
                 TodoListId = list.Id,
                 SharedWithUserId = request.UserId,
                 Permission = request.Permission
-            };
-
-            context.TodoListShares.Add(share);
+            });
             await context.SaveChangesAsync();
             await hubContext.Clients.User(request.UserId.ToString()).SendAsync("ListShared", list);
-            return new TodoListOutputDto
-            {
-                List = list,
-                Message = $"List {list.Id} shared with {request.UserId} successfully",
-                Success = true
-            };
+            return ServiceResult<TodoList>.Success(list);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to share TodoList with ID {ListId} with user {UserId}", list.Id, request.UserId);
-            return new TodoListOutputDto
-            {
-                Message = $"Failed to share list {list.Id} with {request.UserId}",
-                Success = false
-            };
+            logger.LogError(ex, "Failed to share todo list {listId} with user {userId}", listId, request.UserId);
+            return ServiceResult<TodoList>.Unknown($"Failed to share todo list with user");
         }
     }
 
-    public async Task<TodoListOutputDto> UnshareListAsync(TodoList list, TodoListShare share, ShareRequest request)
+    public async Task<ServiceResult<TodoList>> UnshareListAsync(Guid listId, Guid userId)
     {
         try
         {
+            if (userId == Guid.Empty)
+            {
+                return ServiceResult<TodoList>.BadRequest("User ID is required");
+            }
+            var userResult = await userService.GetUserByIdAsync(userId);
+            var user = userResult.Data;
+            if (user == null)
+            {
+                return ServiceResult<TodoList>.NotFound(userResult.Error!.Message);
+            }
+
+            var result = await FetchListAsync(listId, false, true, true, false);
+            var list = result.Data;
+
+            if (list == null)
+            {
+                return result;
+            }
+
+            // Check if user is shared
+            var share = list.SharedWith.FirstOrDefault(u => u.SharedWithUserId == user.Id);
+            if (share == null)
+            {
+                return ServiceResult<TodoList>.NotFound("User is not shared with this list");
+            }
+
             context.TodoListShares.Remove(share);
             await context.SaveChangesAsync();
-            await hubContext.Clients.User(request.UserId.ToString()).SendAsync("ListUnshared", list);
-            return new TodoListOutputDto
-            {
-                List = list,
-                Message = $"List {list.Id} unshared with {request.UserId} successfully",
-                Success = true
-            };
+            await hubContext.Clients.User(userId.ToString()).SendAsync("ListUnshared", list);
+            return ServiceResult<TodoList>.Success(list);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to unshare TodoList with ID {ListId} from user {UserId}", list.Id, request.UserId);
-            return new TodoListOutputDto
-            {
-                Message = $"Failed to unshare list {list.Id} from {request.UserId}",
-                Success = false
-            };
+            logger.LogError(ex, "Failed to unshare todo list {listId} from user {userId}", listId, userId);
+            return ServiceResult<TodoList>.Unknown("Failed to unshare todo list from user");
         }
     }
 
-    public async Task<IEnumerable<TodoList>> GetAllListByUserIdAsync(Guid userId)
+    public async Task<ServiceResult<IEnumerable<TodoList>>> GetAllListByUserIdAsync()
     {
         try
         {
             var lists = await context.TodoLists
-                .Where(l => l.OwnerId == userId || l.SharedWith.Any(s => s.SharedWithUserId == userId))
+                .Where(l => l.OwnerId == userContext.UserId || l.SharedWith.Any(s => s.SharedWithUserId == userContext.UserId))
                 .ToListAsync();
 
-            return lists;
+            if (lists == null)
+            {
+                return ServiceResult<IEnumerable<TodoList>>.NotFound("No lists found associated with owner");
+            }
+
+            return ServiceResult<IEnumerable<TodoList>>.Success(lists);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to fetch TodoLists for user {UserId}", userId);
-            return [];
+            logger.LogError(ex, "Failed to fetch todo lists for user {UserId}", userContext.UserId);
+            return ServiceResult<IEnumerable<TodoList>>.Unknown("Failed to fetch todo lists for user");
         }
     }
+
+    public async Task<ServiceResult<TodoList>> FilterListItems(Guid listId, AttributeType attribute, string key)
+    {
+        try
+        {
+            var result = await FetchListAsync(listId, true, false, false, false);
+            var list = result.Data;
+
+            if (list == null)
+            {
+                return result;
+            }
+
+            if (AttributeMap.TryGetValue(attribute, out var accessor))
+            {
+                list.Items = [.. list.Items.Where(i => accessor.FilterPredicate(i, key))];
+            }
+
+            return ServiceResult<TodoList>.Success(list);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to filter todo list {listId}", listId);
+            return ServiceResult<TodoList>.Unknown($"Failed to filter todo list");
+        }
+    }
+
+    public async Task<ServiceResult<TodoList>> SortListItems(Guid listId, AttributeType attribute, OrderType order)
+    {
+        var result = await FetchListAsync(listId, true, false, false, false);
+        var list = result.Data;
+
+        if (list == null)
+        {
+            return result;
+        }
+
+        // Sorting query for items
+        var itemsQuery = context.TodoItems.Where(i => i.TodoListId == listId);
+
+        if (AttributeMap.TryGetValue(attribute, out var accessor))
+        {
+            itemsQuery = order == OrderType.Descending
+                ? itemsQuery.OrderByDescending(accessor.SortSelector)
+                : itemsQuery.OrderBy(accessor.SortSelector);
+        }
+
+        list.Items = await itemsQuery.ToListAsync();
+        return ServiceResult<TodoList>.Success(list);
+    }
+
+    #region Private method
+    private async Task<ServiceResult<TodoList>> FetchListAsync(
+        Guid listId,
+        bool loadItem = false,
+        bool loadShareWith = false,
+        bool requireOwner = false,
+        bool requireEdit = false)
+    {
+        // This checks if eneity is tracked before making a query to the database
+        var list = await context.TodoLists.FindAsync(listId);
+
+        if (list == null)
+            return ServiceResult<TodoList>.NotFound("The todo list cannot be found");
+
+        // Manually load items/shareWith if required and not already loaded
+        if (loadItem && !context.Entry(list).Collection(l => l.Items).IsLoaded)
+        {
+            await context.Entry(list).Collection(l => l.Items).LoadAsync();
+        }
+        if (loadShareWith && !context.Entry(list).Collection(l => l.SharedWith).IsLoaded)
+        {
+            await context.Entry(list).Collection(l => l.SharedWith).LoadAsync();
+        }
+
+        // If owner, can do anything
+        // If require owner but not, forbidden
+        // If require edit but don't have permission, forbidden
+        // If list is shared, then can view
+        // Otherwise, not owner or not shared, forbidden
+        if (IsOwner(list))
+        {
+            return ServiceResult<TodoList>.Success(list);
+        }
+        else if (requireOwner && !IsOwner(list))
+        {
+            return ServiceResult<TodoList>.Forbidden("You are not the owner of this list");
+        }
+        else if (requireEdit && !IsSharedEditPermission(list))
+        {
+            return ServiceResult<TodoList>.Forbidden("You lack edit permission to this list");
+        }
+        else if (IsSharedViewOnly(list) || IsSharedEditPermission(list))
+        {
+            return ServiceResult<TodoList>.Success(list);
+        }
+        return ServiceResult<TodoList>.Forbidden("You are not authorized to access this list");
+    }
+
+    private async Task<TodoItem> DeleteItem(TodoItem item)
+    {
+        // Delete associated media file if it exists
+        if (!string.IsNullOrEmpty(item.MediaUrl))
+        {
+            var filePath = Path.Combine(Directory.GetCurrentDirectory(), item.MediaUrl.TrimStart('/').Replace("/", Path.DirectorySeparatorChar.ToString()));
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+        }
+
+        context.TodoItems.Remove(item);
+        await context.SaveChangesAsync();
+        return item;
+    }
+
+    private bool IsOwner(TodoList list)
+    {
+        return list != null && list.OwnerId == userContext.UserId;
+    }
+
+    private bool IsSharedViewOnly(TodoList list)
+    {
+        return list != null
+        && list.SharedWith.Any(
+            s => s.SharedWithUserId == userContext.UserId
+            && s.Permission == PermissionType.View);
+    }
+
+    private bool IsSharedEditPermission(TodoList list)
+    {
+        return list != null
+        && list.SharedWith.Any(
+            s => s.SharedWithUserId == userContext.UserId
+            && s.Permission == PermissionType.Edit);
+    }
+    #endregion
 }

@@ -1,16 +1,16 @@
 import axios from 'axios';
-import { LoginOutputDto, UserOutputDto, User } from '../types';
+import { LoginResponse, User } from '../types';
 
 const API_BASE_URL = 'http://localhost:5286/api/authentication';
 
 // --- API Methods ---
-export async function login(email: string): Promise<LoginOutputDto> {
-    const response = await axios.post<LoginOutputDto>(`${API_BASE_URL}/login`, { email });
+export async function login(email: string): Promise<LoginResponse> {
+    const response = await axios.post<LoginResponse>(`${API_BASE_URL}/login`, { email });
     return response.data;
 }
 
-export async function createUser(email: string): Promise<UserOutputDto> {
-    const response = await axios.post<UserOutputDto>(`${API_BASE_URL}/user/create`, null, {
+export async function createUser(email: string): Promise<User> {
+    const response = await axios.post<User>(`${API_BASE_URL}/user/create`, null, {
         params: { email },
     });
     return response.data;
