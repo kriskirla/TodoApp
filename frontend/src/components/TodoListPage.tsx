@@ -30,6 +30,8 @@ interface TodoListPageProps {
 const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
     const [lists, setLists] = useState<TodoList[]>([]);
     const [newListTitle, setNewListTitle] = useState<string>('');
+    const [editingListId, setEditingListId] = useState<string | null>(null);
+    const [editedTitle, setEditedTitle] = useState<string>('');
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState<boolean>(false);
     const [listIdToDelete, setListIdToDelete] = useState<string | null>(null);
     const [shareDialogOpen, setShareDialogOpen] = useState<boolean>(false);
@@ -118,6 +120,18 @@ const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
         } catch (err) {
             console.error('Failed to create list:', err);
             setError('Failed to create list.');
+        }
+    };
+
+    const handleRenameList = async (listId: string) => {
+        if (!editedTitle.trim()) return;
+        try {
+            await todoApi.updateList(listId, { title: editedTitle }, token);
+            setEditingListId(null);
+            setEditedTitle('');
+        } catch (err) {
+            console.error('Failed to rename list:', err);
+            toast.error('Failed to rename list.');
         }
     };
 
@@ -229,7 +243,36 @@ const TodoListPage: React.FC<TodoListPageProps> = ({ token }) => {
                             </>
                         }
                     >
-                        <ListItemText primary={list.title} />
+                        {editingListId === list.id ? (
+                            <TextField
+                                value={editedTitle}
+                                onChange={(e) => setEditedTitle(e.target.value)}
+                                onBlur={() => handleRenameList(list.id)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        handleRenameList(list.id);
+                                    }
+                                }}
+                                size="small"
+                                autoFocus
+                                fullWidth
+                                variant="standard"
+                            />
+                        ) : (
+                            <ListItemText
+                                primary={
+                                    <Typography
+                                        onClick={() => {
+                                            setEditingListId(list.id);
+                                            setEditedTitle(list.title);
+                                        }}
+                                        sx={{ cursor: 'pointer' }}
+                                    >
+                                        {list.title}
+                                    </Typography>
+                                }
+                            />
+                        )}
                     </ListItem>
                 ))}
             </List>

@@ -111,7 +111,7 @@ const TodoListDetailPage = ({ token }: TodoListDetailPageProps) => {
     useEffect(() => {
         const handleFilter = async () => {
             try {
-                if (filterAttribute && filterKey !== '') {
+                if (filterAttribute !== '' && filterKey !== '') {
                     let valueToUse: string = filterKey;
 
                     if (
@@ -221,7 +221,13 @@ const TodoListDetailPage = ({ token }: TodoListDetailPageProps) => {
         fetchListDetails();
     }
 
-    const formatDate = (date: string | Date): string => new Date(date).toISOString();
+    const formatDate = (date: string | Date): string => {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
 
     return (
         <Box maxWidth={1000} mx="auto" p={2}>
@@ -298,7 +304,6 @@ const TodoListDetailPage = ({ token }: TodoListDetailPageProps) => {
                             label="Filter Value"
                             value={filterKey}
                             onChange={(e) => setFilterKey(e.target.value)}
-                            onBlur={() => { }}
                         />
                     )}
 

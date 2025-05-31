@@ -29,10 +29,10 @@ public class TodoController(ITodoService todoService) : BaseController
     /// This API retrieves a specific todo list by ID, with optional filtering and sorting of its items.
     /// </summary>
     /// <param name="listId">The ID of the todo list.</param>
-    /// <param name="filter">Optional: Attribute type to filter items.</param>
+    /// <param name="filter">Optional: Attribute type to filter items. (Name = 0, Description = 1, DueDate = 2, Status = 3, Priority = 4)</param>
     /// <param name="key">Optional: Filter key.</param>
-    /// <param name="sort">Optional: Attribute type to sort items.</param>
-    /// <param name="order">Optional: Sort order.</param>
+    /// <param name="sort">Optional: Attribute type to sort items. (Name = 0, Description = 1, DueDate = 2, Status = 3, Priority = 4)</param>
+    /// <param name="order">Optional: Sort order. (Descending = 0, Ascending = 1)</param>
     /// <returns>The requested todo list and optionally filtered/sorted items.</returns>
     [HttpGet("list/{listId}")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]

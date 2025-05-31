@@ -35,7 +35,7 @@ public class TodoService(
                 if (DateTime.TryParse(v, out var parsed))
                 {
                     var utcDate = DateTime.SpecifyKind(parsed.Date, DateTimeKind.Utc);
-                    return i => i.DueDate == null || i.DueDate.Value.Date == utcDate;
+                    return i => i.DueDate != null && i.DueDate.Value.Date == utcDate;
                 }
                 return i => false;
             },
@@ -421,7 +421,7 @@ public class TodoService(
     {
         try
         {
-            var result = await FetchListAsync(listId, false, false, false, false);
+            var result = await FetchListAsync(listId, true, true, false, false);
             var list = result.Data;
 
             if (list == null)
