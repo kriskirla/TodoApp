@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
 using TodoApp.Enums;
 using TodoApp.Models;
 using TodoApp.Services;
@@ -11,231 +10,156 @@ namespace TodoApp.Controllers;
 [ApiVersion("1.0")]
 [Authorize]
 [Route("api/[controller]")]
-public class TodoController(
-    ITodoService todoService,
-    IUserService userService) : ControllerBase
+public class TodoController(ITodoService todoService) : BaseController
 {
+    /// <summary>
+    /// This API creates the list given TodoList information
+    /// </summary>
+    /// <param name="list"></param>
+    /// <returns>The TodoList with unique ID and owner ID associated</returns>
     [HttpPost("list/create")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> CreateList([FromBody] TodoList list)
     {
-        var userId = GetCurrentUserId();
-        if (userId == null)
-        {
-            var claimsInfo = string.Join(", ", User.Claims.Select(c => $"{c.Type}: {c.Value}"));
-            return Unauthorized($"Invalid or missing user ID in token. {claimsInfo}");
-        }
-
-        list.OwnerId = userId.Value;
-        return Ok(await todoService.CreateListAsync(list));
+        return FromServiceResult(await todoService.CreateListAsync(list));
     }
 
+    /// <summary>
+    /// This API retrieves a specific todo list by ID, with optional filtering and sorting of its items.
+    /// </summary>
+    /// <param name="listId">The ID of the todo list.</param>
+    /// <param name="filter">Optional: Attribute type to filter items. (Name = 0, Description = 1, DueDate = 2, Status = 3, Priority = 4)</param>
+    /// <param name="key">Optional: Filter key.</param>
+    /// <param name="sort">Optional: Attribute type to sort items. (Name = 0, Description = 1, DueDate = 2, Status = 3, Priority = 4)</param>
+    /// <param name="order">Optional: Sort order. (Descending = 0, Ascending = 1)</param>
+    /// <returns>The requested todo list and optionally filtered/sorted items.</returns>
     [HttpGet("list/{listId}")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetList(Guid listId)
+    public async Task<IActionResult> GetList(
+        Guid listId,
+        [FromQuery] AttributeType? filter,
+        [FromQuery] string? key,
+        [FromQuery] AttributeType? sort,
+        [FromQuery] OrderType? order)
     {
-        var list = await todoService.GetListAsync(listId);
-
-        if (list == null)
+        if (filter != null && sort != null)
         {
-            return NotFound("The todo list cannot be found");
+            return FromServiceResult(await todoService.SortFilteredListItemsAsync(listId, filter.Value, key, sort.Value, order));
         }
-        else if (!IsOwner(list) && !IsSharedViewOnly(list) && !IsSharedEditPermission(list))
+        else if (filter != null)
         {
-            return Forbid("You are not the owner or lack view/edit permission to this list");
+            return FromServiceResult(await todoService.FilterListItemsAsync(listId, filter.Value, key));
         }
-        return Ok(list);
+        else if (sort != null)
+        {
+            return FromServiceResult(await todoService.SortListItemsAsync(listId, sort.Value, order));
+        }
+        return FromServiceResult(await todoService.GetListAsync(listId));
     }
 
+    /// <summary>
+    /// This API updates an existing todo list.
+    /// </summary>
+    /// <param name="listId">The ID of the list to update.</param>
+    /// <param name="update">The updated list information.</param>
+    /// <returns>The updated todo list.</returns>
     [HttpPut("list/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateList(Guid listId, [FromBody] TodoList update)
     {
-        var list = await todoService.GetListAsync(listId);
-
-        if (list == null)
-        {
-            return NotFound("The todo list cannot be found");
-        }
-
-        if (!IsOwner(list) && !IsSharedEditPermission(list))
-        {
-            return Forbid("You are not the owner or lack edit permission to this list");
-        }
-
-        return Ok(await todoService.UpdateListAsync(list, update));
+        return FromServiceResult(await todoService.UpdateListAsync(listId, update));
     }
 
+    /// <summary>
+    /// This API deletes a todo list by ID.
+    /// </summary>
+    /// <param name="listId">The ID of the list to delete.</param>
+    /// <returns>The deleted todo list.</returns>
     [HttpDelete("list/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteList(Guid listId)
     {
-        var list = await todoService.GetListAsync(listId);
-        if (list == null)
-        {
-            return NotFound("The todo list cannot be found");
-        }
-
-        if (!IsOwner(list))
-        {
-            return Forbid("You are not the owner of this list");
-        }
-        return Ok(await todoService.DeleteListAsync(list));
+        return FromServiceResult(await todoService.DeleteListAsync(listId));
     }
 
+    /// <summary>
+    /// This API adds a new item to the specified todo list.
+    /// </summary>
+    /// <param name="listId">The ID of the list to add the item to.</param>
+    /// <param name="itemForm">The form containing the item data.</param>
+    /// <returns>The updated todo list with the new item.</returns>
     [HttpPost("item/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> AddItem(Guid listId, [FromForm] TodoItemForm itemForm)
     {
-        var list = await todoService.GetListAsync(listId);
-        if (list == null)
-        {
-            return NotFound("The todo list cannot be found");
-        }
-        else if (!IsOwner(list) && !IsSharedEditPermission(list))
-        {
-            return Forbid("You are not the owner or lack edit permission to this list");
-        }
-        return Ok(await todoService.AddItemToListAsync(list, itemForm));
+        return FromServiceResult(await todoService.AddItemToListAsync(listId, itemForm));
     }
 
+    /// <summary>
+    /// This API deletes a specific item from a todo list.
+    /// </summary>
+    /// <param name="listId">The ID of the list containing the item.</param>
+    /// <param name="itemId">The ID of the item to delete.</param>
+    /// <returns>The updated todo list without the deleted item.</returns>
     [HttpDelete("item/{listId}/{itemId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteItem(Guid listId, Guid itemId)
     {
-        var list = await todoService.GetListAsync(listId);
-        if (list == null)
-        {
-            return NotFound("The todo list cannot be found");
-        }
-        else if (!IsOwner(list) && !IsSharedEditPermission(list))
-        {
-            return Forbid("You are not the owner or lack edit permission to this list");
-        }
-        var item = list.Items.FirstOrDefault(i => i.Id == itemId);
-        if (item == null)
-        {
-            return NotFound("The todo item cannot be found");
-        }
-        return Ok(await todoService.DeleteItemFromListAsync(list, item));
+        return FromServiceResult(await todoService.DeleteItemFromListAsync(listId, itemId));
     }
 
-    [HttpPost("share/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
+    /// <summary>
+    /// This API shares a todo list with another user.
+    /// </summary>
+    /// <param name="listId">The ID of the list to share.</param>
+    /// <param name="request">The request containing the user ID and permission.</param>
+    /// <returns>The shared todo list with updated sharing info.</returns>
+    [HttpPost("list/share/{listId}")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ShareList(Guid listId, [FromBody] ShareRequest request)
     {
-        var list = await todoService.GetListAsync(listId);
-        if (list == null)
-        {
-            return NotFound("The todo list cannot be found");
-        }
-        else if (!IsOwner(list))
-        {
-            return Forbid("You are not the owner of this list");
-        }
-        else if (request.UserId == Guid.Empty)
-        {
-            return BadRequest("User ID is required");
-        }
-        else if (await userService.GetUserByIdAsync(request.UserId) == null)
-        {
-            return NotFound("User not found");
-        }
-        return Ok(await todoService.ShareListAsync(list, request));
+        return FromServiceResult(await todoService.ShareListAsync(listId, request));
     }
 
-    [HttpPost("unshare/{listId}")]
-    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoListOutputDto))]
+    /// <summary>
+    /// This API revokes a user's access to a shared todo list.
+    /// </summary>
+    /// <param name="listId">The ID of the list to unshare.</param>
+    /// <param name="userId">The ID of the user to unshare from the list.</param>
+    /// <returns>The updated todo list without the user access.</returns>
+    [HttpDelete("list/unshare/{listId}/{userId}")]
+    [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(TodoList))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> UnshareList(Guid listId, [FromBody] ShareRequest request)
+    public async Task<IActionResult> UnshareList(Guid listId, Guid userId)
     {
-        var list = await todoService.GetListAsync(listId);
-        if (list == null)
-        {
-            return NotFound("The todo list cannot be found");
-        }
-        else if (!IsOwner(list))
-        {
-            return Forbid("You are not the owner of this list");
-        }
-        else if (request.UserId == Guid.Empty)
-        {
-            return BadRequest("User ID is required");
-        }
-
-        var user = await userService.GetUserByIdAsync(request.UserId);
-        if (user == null)
-        {
-            return NotFound("User not found");
-        }
-        // Check if user is shared
-        var share = list.SharedWith.FirstOrDefault(u => u.SharedWithUserId == user.Id);
-        if (share == null)
-        {
-            return NotFound("User is not shared with this list");
-        }
-        return Ok(await todoService.UnshareListAsync(list, share, request));
+        return FromServiceResult(await todoService.UnshareListAsync(listId, userId));
     }
 
+    /// <summary>
+    /// This API retrieves all todo lists owned or shared with the current user.
+    /// </summary>
+    /// <returns>A list of todo lists associated with the current user.</returns>
     [HttpGet("list/user")]
     [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(IEnumerable<TodoList>))]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> GetAllListByUserId()
     {
-        var userId = GetCurrentUserId();
-        if (userId == null)
-        {
-            return BadRequest("User ID is required");
-        }
-        return Ok(await todoService.GetAllListByUserIdAsync(userId.Value));
+        return FromServiceResult(await todoService.GetAllListByUserIdAsync());
     }
-
-    #region Private Methods
-    private Guid? GetCurrentUserId()
-    {
-        return Guid.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId) ? userId : null;
-    }
-
-    private bool IsOwner(TodoList list)
-    {
-        var userId = GetCurrentUserId();
-        return list != null && userId.HasValue && list.OwnerId == userId.Value;
-    }
-
-    private bool IsSharedEditPermission(TodoList list)
-    {
-        var userId = GetCurrentUserId();
-        return list != null
-        && userId.HasValue
-        && list.SharedWith.Any(
-            s => s.SharedWithUserId == userId.Value
-            && s.Permission == PermissionType.Edit);
-    }
-
-    private bool IsSharedViewOnly(TodoList list)
-    {
-        var userId = GetCurrentUserId();
-        return list != null
-        && userId.HasValue
-        && list.SharedWith.Any(
-            s => s.SharedWithUserId == userId.Value
-            && s.Permission == PermissionType.View);
-    }
-    #endregion
 }

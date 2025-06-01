@@ -17,9 +17,13 @@ CREATE TABLE todo_lists (
 CREATE TABLE todo_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     list_id UUID REFERENCES todo_lists(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
+    item_name VARCHAR(255) NOT NULL,
+    content TEXT,
     media_url VARCHAR(255),
     media_type INT CHECK (media_type IN (0, 1)),
+    due_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    item_status INT CHECK (item_status IN (0, 1, 2)),
+    item_priority INT CHECK (item_status IN (0, 1, 2, 3)),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

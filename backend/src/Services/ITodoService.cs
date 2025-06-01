@@ -1,16 +1,20 @@
+using TodoApp.Enums;
 using TodoApp.Models;
 
 namespace TodoApp.Services;
 
 public interface ITodoService
 {
-    Task<TodoListOutputDto> CreateListAsync(TodoList listId);
-    Task<TodoList?> GetListAsync(Guid listId);
-    Task<TodoListOutputDto> UpdateListAsync(TodoList list, TodoList update);
-    Task<TodoListOutputDto> DeleteListAsync(TodoList list);
-    Task<TodoListOutputDto> AddItemToListAsync(TodoList list, TodoItemForm itemForm);
-    Task<TodoListOutputDto> DeleteItemFromListAsync(TodoList list, TodoItem item);
-    Task<TodoListOutputDto> ShareListAsync(TodoList list, ShareRequest request);
-    Task<TodoListOutputDto> UnshareListAsync(TodoList list, TodoListShare share, ShareRequest request);
-    Task<IEnumerable<TodoList>> GetAllListByUserIdAsync(Guid userId);
+    Task<ServiceResult<TodoList>> CreateListAsync(TodoList listId);
+    Task<ServiceResult<TodoList>> GetListAsync(Guid listId);
+    Task<ServiceResult<TodoList>> UpdateListAsync(Guid listId, TodoList update);
+    Task<ServiceResult<TodoList>> DeleteListAsync(Guid listId);
+    Task<ServiceResult<TodoList>> AddItemToListAsync(Guid listId, TodoItemForm itemForm);
+    Task<ServiceResult<TodoList>> DeleteItemFromListAsync(Guid listId, Guid itemId);
+    Task<ServiceResult<TodoList>> ShareListAsync(Guid listId, ShareRequest request);
+    Task<ServiceResult<TodoList>> UnshareListAsync(Guid listId, Guid userId);
+    Task<ServiceResult<IEnumerable<TodoList>>> GetAllListByUserIdAsync();
+    Task<ServiceResult<TodoList>> FilterListItemsAsync(Guid listId, AttributeType filter, string? key);
+    Task<ServiceResult<TodoList>> SortListItemsAsync(Guid listId, AttributeType sort, OrderType? order);
+    Task<ServiceResult<TodoList>> SortFilteredListItemsAsync(Guid listId, AttributeType filter, string? key, AttributeType sort, OrderType? order);
 }

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Todo.Models;
 using TodoApp.Data;
 using TodoApp.Models;
 using TodoApp.Util;
@@ -10,106 +11,107 @@ public class UserService(
     JwtUtil jwtUtil,
     ILogger<TodoService> logger) : IUserService
 {
-    public async Task<UserOutputDto> AuthenticateUserAsync(string username)
+    public async Task<ServiceResult<LoginResponse>> AuthenticateUserAsync(AuthenticateUserRequest request)
     {
         try
         {
-            // Fetch user by username
-            var user = await context.Users.FirstOrDefaultAsync(u => u.Username == username);
-            if (user == null)
+            if (string.IsNullOrEmpty(request.Email))
             {
-                return new UserOutputDto
-                {
-                    Success = false,
-                    Message = "User not found"
-                };
+                return ServiceResult<LoginResponse>.BadRequest("Email is required.");
+            }
+
+            // Fetch user by email
+            var result = await GetUserByEmailAsync(request.Email);
+            var user = result.Data;
+            if (user == null || user.Username == null)
+            {
+                return ServiceResult<LoginResponse>.NotFound(result.Error!.Message);
             }
 
             // Generate JWT token
-            var token = jwtUtil.GenerateToken(user.Username!, user.Id);
-            return new UserOutputDto
-            {
-                User = user,
-                Token = token,
-                Message = "User authenticated successfully",
-                Success = true
-            };
+            var token = jwtUtil.GenerateToken(user.Username, user.Id);
+            return ServiceResult<LoginResponse>.Success(token);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error authenticating user");
-            return new UserOutputDto
-            {
-                Message = "Error authenticating user",
-                Success = false
-            };
+            logger.LogError(ex, "Error authenticating user {}", request.Email);
+            return ServiceResult<LoginResponse>.Unknown("Error authenticating user");
         }
-
     }
 
-    public async Task<UserOutputDto> CreateUserAsync(string email)
+    public async Task<ServiceResult<User>> CreateUserAsync(RegistrationRequest request)
     {
         try
         {
-            // Check if username already exists
-            var existing = await context.Users.FirstOrDefaultAsync(u => u.Username == email);
+            if (string.IsNullOrEmpty(request.Email))
+            {
+                return ServiceResult<User>.BadRequest("Email is required");
+            }
+
+            var existing = await context.Users.FirstOrDefaultAsync(u => u.Username == request.Email);
             if (existing != null)
             {
-                return new UserOutputDto
-                {
-                    Message = "User already exists",
-                    Success = false
-                };
+                return ServiceResult<User>.BadRequest("User already exists");
             }
 
             var user = new User
             {
-                Username = email
+                Username = request.Email
             };
 
             context.Users.Add(user);
             await context.SaveChangesAsync();
-            return new UserOutputDto
-            {
-                User = user,
-                Message = "User created successfully",
-                Success = true
-            };
+            return ServiceResult<User>.Success(user);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error creating user");
-            return new UserOutputDto
-            {
-                Message = "Error creating user",
-                Success = false
-            };
+            logger.LogError(ex, "Error creating user {email}", request.Email);
+            return ServiceResult<User>.Unknown("Error creating user");
         }
     }
 
-    public async Task<User?> GetUserByIdAsync(Guid id)
+    public async Task<ServiceResult<User>> GetUserByIdAsync(Guid id)
     {
         try
         {
-            return await context.Users.FindAsync(id);
+            var user = await context.Users.FindAsync(id);
+
+            if (user == null)
+            {
+                return ServiceResult<User>.NotFound("User not found");
+            }
+
+            return ServiceResult<User>.Success(user);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error fetching user by ID");
-            return null;
+            logger.LogError(ex, "Error fetching user by ID {userId}", id);
+            return ServiceResult<User>.Unknown("Error fetching user by ID");
         }
     }
-    
-    public async Task<User?> GetUserByEmailAsync(string email)
+
+    public async Task<ServiceResult<User>> GetUserByEmailAsync(string email)
     {
         try
         {
-            return await context.Users.FirstOrDefaultAsync(u => u.Username == email);
+            if (string.IsNullOrEmpty(email))
+            {
+                return ServiceResult<User>.BadRequest("Email is required");
+            }
+
+            var user = await context.Users.FirstOrDefaultAsync(u => u.Username == email);
+
+            if (user == null)
+            {
+                return ServiceResult<User>.NotFound("User not found");
+            }
+
+            return ServiceResult<User>.Success(user);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error fetching user by email");
-            return null;
+            logger.LogError(ex, "Error fetching user by email {email}", email);
+            return ServiceResult<User>.Unknown("Error fetching user by email");
         }
     }
 }

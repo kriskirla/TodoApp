@@ -8,8 +8,11 @@ using TodoApp.Data;
 using TodoApp.Services;
 using TodoApp.Util;
 using Microsoft.OpenApi.Models;
+using System.Text.Json.Serialization;
 
-internal class Program
+namespace TodoApp;
+
+public class Program
 {
     private static void Main(string[] args)
     {
@@ -22,6 +25,8 @@ internal class Program
         // Register services
         builder.Services.AddScoped<IUserService, UserService>();
         builder.Services.AddScoped<ITodoService, TodoService>();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<IUserContext, UserContext>();
 
         // Add controllers, swagger, SignalR, DbContextPool, etc.
         builder.Services.AddControllers();
@@ -48,6 +53,11 @@ internal class Program
                     Array.Empty<string>()
                 }
             });
+
+            // Added swagger xml comment
+            var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+            c.IncludeXmlComments(xmlPath);
         });
 
         builder.Services.AddSignalR();
