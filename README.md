@@ -4,8 +4,8 @@
 The Collaborative TODO Application is a real-time collaborative platform that allows users to create, update, and manage TODO lists. Users can share their lists with others, allowing for collaborative editing and viewing. The application supports media content such as images and videos, enhancing the functionality of TODO items.
 
 ## Video Demo
-[Demo Video 1](https://youtu.be/mh1iMUtocj0?si=bmEyb83SKPgpZytG): Showcasing basic register/login/token usage, CRUD Todo List and items, Real-time sharing and collaboration
-[Demo Video 2](https://youtu.be/iWkVmqnb11Y): Showcasing decoupled login/registration, Filter/Sorting functionality and combined.
+- [Demo Video 1](https://youtu.be/mh1iMUtocj0?si=bmEyb83SKPgpZytG): Showcasing basic register/login/token usage, CRUD Todo List and items, Real-time sharing and collaboration
+- [Demo Video 2](https://youtu.be/iWkVmqnb11Y): Showcasing decoupled login/registration, Filter/Sorting functionality and combined.
 
 ## Features
 - Create, update, and delete TODO lists.
